@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Int      // em centavos
+  currency    String   @default("BRL")
+  imageUrl    String?
+  active      Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      Order[]
+
+  @@index([active])
+}
+
+model Order {
+  id              String        @id @default(cuid())
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  customerEmail   String
+  customerName    String?
+  customerPhone   String?
+  customerTaxId   String?       // CPF/CNPJ
+  amount          Int           // em centavos
+  currency        String        @default("BRL")
+  status          OrderStatus   @default(PENDING)
+  paymentMethod   PaymentMethod
+  paymentProvider PaymentProvider
+  providerPaymentId String?     // ID do pagamento no provedor
+  paidAt          DateTime?
+  expiresAt       DateTime?     // Para PIX
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  transactions    Transaction[]
+
+  @@index([status])
+  @@index([customerEmail])
+  @@index([providerPaymentId])
+}
+
+model Transaction {
+  id              String          @id @default(cuid())
+  orderId         String
+  order           Order           @relation(fields: [orderId], references: [id])
+  provider        PaymentProvider
+  providerTxId    String          // ID da transação no provedor
+  status          String
+  amount          Int
+  rawResponse     Json?
+  createdAt       DateTime        @default(now())
+
+  @@index([orderId])
+  @@index([providerTxId])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  PIX
+  BOLETO
+}
+
+enum PaymentProvider {
+  STRIPE
+  MERCADOPAGO
+  ABACATEPAY
+}

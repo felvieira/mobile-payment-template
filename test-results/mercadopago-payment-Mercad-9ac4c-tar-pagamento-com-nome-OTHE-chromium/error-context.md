@@ -1,0 +1,55 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - link "Voltar à loja" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - button "Voltar à loja" [ref=e5]:
+        - img
+        - text: Voltar à loja
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e9]: Resumo do Pedido
+        - generic [ref=e10]:
+          - heading "Test Product 1764551515491" [level=3] [ref=e11]
+          - paragraph [ref=e12]: E2E test product
+          - generic [ref=e13]:
+            - generic [ref=e14]: Total
+            - generic [ref=e15]: R$ 10,00
+      - generic [ref=e16]:
+        - generic [ref=e18]: Dados do Cliente
+        - generic [ref=e19]:
+          - generic [ref=e20]:
+            - generic [ref=e21]: Email *
+            - textbox "Email *" [ref=e22]:
+              - /placeholder: seu@email.com
+              - text: test@example.com
+          - generic [ref=e23]:
+            - generic [ref=e24]: Nome
+            - textbox "Nome" [ref=e25]:
+              - /placeholder: Seu nome
+              - text: OTHE
+          - generic [ref=e26]:
+            - generic [ref=e27]: Telefone (para PIX)
+            - textbox "Telefone (para PIX)" [ref=e28]:
+              - /placeholder: "11999999999"
+          - generic [ref=e29]:
+            - generic [ref=e30]: CPF (para PIX)
+            - textbox "CPF (para PIX)" [ref=e31]:
+              - /placeholder: 000.000.000-00
+          - generic [ref=e32]:
+            - paragraph [ref=e33]: Forma de Pagamento
+            - button "Cartão de Crédito (Stripe)" [ref=e34]:
+              - img
+              - text: Cartão de Crédito (Stripe)
+            - button "Cartão / Parcelado (Mercado Pago)" [ref=e35]:
+              - img
+              - text: Cartão / Parcelado (Mercado Pago)
+            - button "PIX" [ref=e36]:
+              - img
+              - text: PIX
+  - button "Open Next.js Dev Tools" [ref=e42] [cursor=pointer]:
+    - img [ref=e43]
+  - alert [ref=e46]
+```
