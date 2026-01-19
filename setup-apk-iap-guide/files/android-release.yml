@@ -1,0 +1,161 @@
+name: Android Release
+
+on:
+  workflow_dispatch:  # Allows manual triggering
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space and add swap
+        run: |
+          echo "=== Before cleanup ==="
+          df -h
+          free -h
+
+          # Remove large pre-installed packages
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/Python
+          sudo rm -rf /opt/hostedtoolcache/Ruby
+          sudo rm -rf /opt/hostedtoolcache/go
+          sudo rm -rf /opt/hostedtoolcache/node
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /opt/pipx
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/share/miniconda
+          sudo rm -rf /usr/local/julia*
+
+          # Remove apt cache and unnecessary packages
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+
+          # Docker cleanup
+          sudo docker image prune --all --force
+          sudo docker system prune --all --force --volumes
+
+          # Add swap space to prevent OOM during Rust compilation
+          echo "=== Adding 8GB swap space ==="
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+          echo "=== After cleanup ==="
+          df -h
+          free -h
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Decode and save keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p android-signing
+          echo "$KEYSTORE_BASE64" | base64 -d > android-signing/memrapp-release.keystore
+          echo "KEYSTORE_PATH=android-signing/memrapp-release.keystore" > android-signing/keystore.properties
+          echo "KEYSTORE_ALIAS=${{ secrets.KEY_ALIAS }}" >> android-signing/keystore.properties
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> android-signing/keystore.properties
+          echo "KEY_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> android-signing/keystore.properties
+
+      - name: Setup Android dockerignore
+        run: |
+          # Use Android-specific dockerignore (includes src-tauri, android-icons, android-signing)
+          cp .dockerignore.android .dockerignore
+          echo "=== Using .dockerignore.android ==="
+          cat .dockerignore | head -20
+
+      - name: Build Docker image
+        run: docker build -f Dockerfile.android -t memrapp-android-builder .
+
+      - name: Build Android app and extract artifacts
+        run: |
+          # Run build in container (container will stop after CMD completes)
+          docker run --name memrapp-build memrapp-android-builder
+
+          # Extract artifacts from stopped container using docker cp
+          mkdir -p android-release
+
+          # Copy APK - try signed first, then unsigned
+          if docker cp "memrapp-build:/app/src-tauri/gen/android/app/build/outputs/apk/universal/release/memrapp-signed.apk" android-release/memrapp-signed.apk 2>/dev/null; then
+            echo "✅ Signed APK copied"
+          else
+            echo "⚠️ Signed APK not found, trying unsigned..."
+            docker cp "memrapp-build:/app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk" android-release/memrapp-unsigned.apk || true
+          fi
+
+          # Copy AAB - try signed first, then unsigned
+          if docker cp "memrapp-build:/app/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/memrapp-signed.aab" android-release/memrapp-signed.aab 2>/dev/null; then
+            echo "✅ Signed AAB copied"
+          else
+            echo "⚠️ Signed AAB not found, trying unsigned..."
+            docker cp "memrapp-build:/app/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab" android-release/memrapp-unsigned.aab || true
+          fi
+
+          # Cleanup
+          docker rm memrapp-build
+
+          echo "📦 Extracted files:"
+          ls -la android-release/
+
+      - name: Upload to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.memrapp.bible
+          releaseFiles: android-release/memrapp-signed.aab
+          track: production
+          status: completed
+          inAppUpdatePriority: 2
+          changesNotSentForReview: false
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            android-release/memrapp-signed.apk
+            android-release/memrapp-signed.aab
+          body: |
+            ## Memrapp Android Release
+
+            ### Downloads
+            - **APK**: Para instalação direta em dispositivos Android
+            - **AAB**: Publicado na Google Play Store
+
+            ### Instalação
+            ```bash
+            adb install memrapp-signed.apk
+            ```
+
+            Ou baixe da [Google Play Store](https://play.google.com/store/apps/details?id=com.memrapp.bible)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: memrapp-android-apk
+          path: android-release/memrapp-signed.apk
+          retention-days: 90
+
+      - name: Upload AAB as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: memrapp-android-aab
+          path: android-release/memrapp-signed.aab
+          retention-days: 90
