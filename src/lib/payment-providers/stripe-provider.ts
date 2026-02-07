@@ -32,22 +32,25 @@ export class StripeProvider implements IPaymentProvider {
 
   async createPayment(
     order: Order,
-    product: Product,
+    product: Product | null,
     customerInfo: CustomerInfo
   ): Promise<PaymentResult> {
     const stripe = this.getStripe()
+
+    const description = product
+      ? `Pagamento: ${product.name}`
+      : (order.metadata as Record<string, unknown>)?.description as string || `Pagamento #${order.id.slice(0, 8)}`
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: order.amount,
       currency: order.currency.toLowerCase(),
       metadata: {
         orderId: order.id,
-        productId: product.id,
-        productName: product.name,
+        ...(product ? { productId: product.id, productName: product.name } : {}),
         customerEmail: customerInfo.email,
       },
       receipt_email: customerInfo.email,
-      description: `Pagamento: ${product.name}`,
+      description,
     })
 
     return {

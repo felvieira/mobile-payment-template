@@ -54,11 +54,12 @@ export interface IPaymentProvider {
   isConfigured(): boolean
 
   /**
-   * Create a new payment with this provider
+   * Create a new payment with this provider.
+   * Product may be null for quick payments (ad-hoc amount).
    */
   createPayment(
     order: Order,
-    product: Product,
+    product: Product | null,
     customerInfo: CustomerInfo
   ): Promise<PaymentResult>
 

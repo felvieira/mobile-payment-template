@@ -25,8 +25,9 @@ model Product {
 
 model Order {
   id              String        @id @default(cuid())
-  productId       String
-  product         Product       @relation(fields: [productId], references: [id])
+  productId       String?
+  product         Product?      @relation(fields: [productId], references: [id])
+  description     String?       // Para pagamento sem produto (quick payment)
   customerEmail   String
   customerName    String?
   customerPhone   String?
@@ -77,10 +78,12 @@ enum PaymentMethod {
   DEBIT_CARD
   PIX
   BOLETO
+  IN_APP_PURCHASE
 }
 
 enum PaymentProvider {
   STRIPE
   MERCADOPAGO
   ABACATEPAY
+  GOOGLE_PLAY
 }

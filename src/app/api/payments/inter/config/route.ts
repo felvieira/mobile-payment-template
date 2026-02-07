@@ -17,9 +17,9 @@ import { errorResponse, withErrorHandler } from '@/lib/api-middleware'
 import { logger, generateRequestId } from '@/lib/logger'
 import fs from 'fs'
 
-async function handler(request: NextRequest) {
+async function handler(request: NextRequest): Promise<NextResponse> {
   const requestId = generateRequestId()
-  const log = logger.info.withRequest(requestId)
+  const log = logger.api.withRequest(requestId)
 
   try {
     if (request.method === 'GET') {
@@ -33,7 +33,7 @@ async function handler(request: NextRequest) {
         fs.existsSync(interCertPath) &&
         fs.existsSync(interKeyPath)
 
-      const config = {
+      const config: Record<string, unknown> = {
         configured: !!interClientId && !!interClientSecret && hasCerts,
         hasClientId: !!interClientId,
         hasClientSecret: !!interClientSecret,
@@ -94,9 +94,9 @@ async function handler(request: NextRequest) {
     } else {
       return errorResponse('Método não permitido', 405, 'METHOD_NOT_ALLOWED')
     }
-  } catch (error: any) {
-    logger.error('Error in Inter config endpoint', error)
-    return errorResponse(error.message || 'Erro ao verificar configuração', 500, 'ERROR')
+  } catch (error) {
+    logger.api.error('Error in Inter config endpoint', error instanceof Error ? error : undefined)
+    return errorResponse(error instanceof Error ? error.message : 'Erro ao verificar configuração', 500)
   }
 }
 

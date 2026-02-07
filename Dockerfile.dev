@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache libc6-compat openssl
+
+WORKDIR /app
+
+# Copy package files and install deps
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Copy prisma schema and generate client
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Copy everything else
+COPY . .
+
+EXPOSE 3000
+
+# Entrypoint: run migrations then start dev server
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run dev"]

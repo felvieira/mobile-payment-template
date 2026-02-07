@@ -36,7 +36,7 @@ interface InterPayoutRequest {
   metadata?: Record<string, any>
 }
 
-async function handler(request: NextRequest) {
+async function handler(request: NextRequest): Promise<NextResponse> {
   const requestId = generateRequestId()
   const log = logger.payment.withRequest(requestId)
 
@@ -96,7 +96,7 @@ async function handler(request: NextRequest) {
 
     // Check if certificate files exist
     if (!fs.existsSync(interCertPath) || !fs.existsSync(interKeyPath)) {
-      log.error('Inter certificate files missing', { interCertPath, interKeyPath })
+      log.error('Inter certificate files missing', undefined, { interCertPath, interKeyPath })
       return errorResponse(
         'Certificados Banco Inter inválidos ou expirados',
         500,
@@ -148,7 +148,7 @@ async function handler(request: NextRequest) {
       return errorResponse(error.message, 400, error.code)
     }
 
-    log.error('Unexpected error in Inter payout', error)
+    log.error('Unexpected error in Inter payout', error instanceof Error ? error : undefined)
     return errorResponse(
       'Erro ao processar pagamento. Tente novamente.',
       500,

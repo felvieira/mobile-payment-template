@@ -9,7 +9,7 @@ import { errorResponse, withErrorHandler } from '@/lib/api-middleware'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import { logger, generateRequestId } from '@/lib/logger'
 
-async function handler(request: NextRequest) {
+async function handler(request: NextRequest): Promise<NextResponse> {
   const requestId = generateRequestId()
   const log = logger.payment.withRequest(requestId)
 

@@ -37,18 +37,24 @@ export class MercadoPagoProvider implements IPaymentProvider {
 
   async createPayment(
     order: Order,
-    product: Product,
+    product: Product | null,
     customerInfo: CustomerInfo
   ): Promise<PaymentResult> {
     const accessToken = this.getAccessToken()
     const baseUrl = this.getBaseUrl()
 
+    const itemTitle = product?.name || (order.metadata as Record<string, unknown>)?.description as string || `Pagamento #${order.id.slice(0, 8)}`
+    const itemDescription = product?.description || itemTitle
+    const failureUrl = product
+      ? `${baseUrl}/checkout/${product.id}?error=payment_failed`
+      : `${baseUrl}/quick-checkout?error=payment_failed`
+
     const preference = {
       items: [
         {
-          id: product.id,
-          title: product.name,
-          description: product.description || product.name,
+          id: product?.id || order.id,
+          title: itemTitle,
+          description: itemDescription,
           quantity: 1,
           currency_id: order.currency,
           unit_price: centsToDecimal(order.amount),
@@ -62,7 +68,7 @@ export class MercadoPagoProvider implements IPaymentProvider {
       external_reference: order.id,
       back_urls: {
         success: `${baseUrl}/success?orderId=${order.id}`,
-        failure: `${baseUrl}/checkout/${product.id}?error=payment_failed`,
+        failure: failureUrl,
         pending: `${baseUrl}/success?orderId=${order.id}&status=pending`,
       },
       auto_return: 'approved' as const,

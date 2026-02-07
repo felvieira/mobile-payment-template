@@ -15,7 +15,7 @@ import { logger, generateRequestId } from '@/lib/logger'
 import { PaymentError } from '@/types'
 import fs from 'fs'
 
-async function handler(request: NextRequest) {
+async function handler(request: NextRequest): Promise<NextResponse> {
   const requestId = generateRequestId()
   const log = logger.payment.withRequest(requestId)
 
@@ -96,7 +96,7 @@ async function handler(request: NextRequest) {
       return errorResponse(error.message, 400, error.code)
     }
 
-    log.error('Unexpected error checking transfer status', error)
+    log.error('Unexpected error checking transfer status', error instanceof Error ? error : undefined)
     return errorResponse('Erro ao verificar status da transferência', 500, 'INTERNAL_ERROR')
   }
 }

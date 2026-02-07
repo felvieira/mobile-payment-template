@@ -50,6 +50,18 @@ export function handlePaymentError(error: unknown): NextResponse<ApiError> {
       ORDER_NOT_FOUND: 404,
       ORDER_ALREADY_PAID: 400,
       CONFIGURATION_ERROR: 500,
+      GOOGLE_PLAY_VALIDATION_ERROR: 400,
+      INTER_CERT_NOT_FOUND: 500,
+      INTER_KEY_NOT_FOUND: 500,
+      INTER_NOT_INITIALIZED: 500,
+      INTER_API_ERROR: 502,
+      CONFIG_MISSING: 500,
+      OAUTH_PARSE_ERROR: 502,
+      OAUTH_FAILED: 502,
+      OAUTH_CONNECTION_ERROR: 502,
+      AUTH_ERROR: 500,
+      PARSE_ERROR: 502,
+      CONNECTION_ERROR: 502,
     }
 
     return createErrorResponse(

@@ -29,7 +29,7 @@ export class AbacatePayProvider implements IPaymentProvider {
 
   async createPayment(
     order: Order,
-    product: Product,
+    product: Product | null,
     customerInfo: CustomerInfo
   ): Promise<PaymentResult> {
     const apiKey = this.getApiKey()
@@ -38,10 +38,14 @@ export class AbacatePayProvider implements IPaymentProvider {
     const expiresAt = new Date()
     expiresAt.setMinutes(expiresAt.getMinutes() + PIX_EXPIRATION_MINUTES)
 
+    const description = product
+      ? `Pagamento: ${product.name}`
+      : (order.metadata as Record<string, unknown>)?.description as string || `Pagamento #${order.id.slice(0, 8)}`
+
     const payload = {
       amount: order.amount, // AbacatePay expects cents
       expiresIn: PIX_EXPIRATION_MINUTES * 60, // in seconds
-      description: `Pagamento: ${product.name}`,
+      description,
       customer: {
         name: customerInfo.name || customerInfo.email.split('@')[0],
         email: customerInfo.email,

@@ -11,6 +11,7 @@ import {
   CreditCard,
   QrCode,
   Barcode,
+  Smartphone,
   LucideIcon,
 } from 'lucide-react'
 import { OrderStatus, PaymentMethod, PaymentProvider } from '@/types'
@@ -83,6 +84,11 @@ export const PROVIDER_CONFIG: Record<PaymentProvider, ProviderConfig> = {
     icon: QrCode,
     color: '#32BCAD',
   },
+  GOOGLE_PLAY: {
+    label: 'Google Play',
+    icon: Smartphone,
+    color: '#01875F',
+  },
 }
 
 /**
@@ -93,4 +99,5 @@ export const METHOD_ICONS: Record<PaymentMethod, LucideIcon> = {
   DEBIT_CARD: CreditCard,
   PIX: QrCode,
   BOLETO: Barcode,
+  IN_APP_PURCHASE: Smartphone,
 }

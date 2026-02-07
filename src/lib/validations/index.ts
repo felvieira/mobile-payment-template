@@ -54,6 +54,36 @@ export const mercadoPagoPaymentSchema = createPaymentSchema.extend({
 export type MercadoPagoPaymentInput = z.infer<typeof mercadoPagoPaymentSchema>
 
 // ============================================
+// QUICK PAYMENT SCHEMAS
+// ============================================
+
+export const createQuickPaymentSchema = z.object({
+  amount: z.number().positive('Valor deve ser positivo'),
+  currency: z.enum(['BRL', 'USD', 'EUR']).default('BRL'),
+  description: z.string().min(1, 'Descrição é obrigatória').max(500, 'Descrição muito longa'),
+  customerEmail: emailSchema,
+  customerName: z.string().optional(),
+  customerPhone: z.string().optional(),
+  customerTaxId: z.string().optional(),
+  paymentProvider: z.enum(['STRIPE', 'MERCADOPAGO', 'ABACATEPAY']),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+})
+
+export type CreateQuickPaymentSchemaInput = z.infer<typeof createQuickPaymentSchema>
+
+// ============================================
+// GOOGLE PLAY SCHEMAS
+// ============================================
+
+export const googlePlayValidationSchema = z.object({
+  productId: z.string().min(1, 'productId é obrigatório'),
+  purchaseToken: z.string().min(1, 'purchaseToken é obrigatório'),
+  packageName: z.string().min(1, 'packageName é obrigatório'),
+})
+
+export type GooglePlayValidationInput = z.infer<typeof googlePlayValidationSchema>
+
+// ============================================
 // PRODUCT SCHEMAS
 // ============================================
 
@@ -82,7 +112,7 @@ export const orderStatusSchema = z.enum(['PENDING', 'PAID', 'FAILED', 'REFUNDED'
 export const orderFiltersSchema = z.object({
   status: orderStatusSchema.optional(),
   email: z.string().optional(),
-  provider: z.enum(['STRIPE', 'MERCADOPAGO', 'ABACATEPAY']).optional(),
+  provider: z.enum(['STRIPE', 'MERCADOPAGO', 'ABACATEPAY', 'GOOGLE_PLAY']).optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
 })

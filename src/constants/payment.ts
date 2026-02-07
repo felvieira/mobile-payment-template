@@ -22,6 +22,7 @@ export const PAYMENT_PROVIDERS = {
   STRIPE: 'STRIPE',
   MERCADOPAGO: 'MERCADOPAGO',
   ABACATEPAY: 'ABACATEPAY',
+  GOOGLE_PLAY: 'GOOGLE_PLAY',
 } as const
 
 /**
@@ -32,6 +33,7 @@ export const PAYMENT_METHODS = {
   DEBIT_CARD: 'DEBIT_CARD',
   PIX: 'PIX',
   BOLETO: 'BOLETO',
+  IN_APP_PURCHASE: 'IN_APP_PURCHASE',
 } as const
 
 /**
@@ -56,6 +58,7 @@ export const PROVIDER_LABELS: Record<PaymentProvider, string> = {
   STRIPE: 'Stripe',
   MERCADOPAGO: 'Mercado Pago',
   ABACATEPAY: 'PIX (Abacate Pay)',
+  GOOGLE_PLAY: 'Google Play',
 }
 
 /**
@@ -66,6 +69,7 @@ export const METHOD_LABELS: Record<PaymentMethod, string> = {
   DEBIT_CARD: 'Cartão de Débito',
   PIX: 'PIX',
   BOLETO: 'Boleto',
+  IN_APP_PURCHASE: 'Compra In-App',
 }
 
 /**

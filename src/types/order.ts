@@ -13,7 +13,7 @@ export type OrderStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED' | 'EXPIRED'
  * Order with all relations
  */
 export interface OrderWithRelations extends Order {
-  product: Product
+  product: Product | null
   transactions: Transaction[]
 }
 
@@ -34,7 +34,8 @@ export interface OrderFilters {
  * Order creation input (internal use)
  */
 export interface CreateOrderInput {
-  productId: string
+  productId?: string
+  description?: string
   customerEmail: string
   customerName?: string
   amount: number

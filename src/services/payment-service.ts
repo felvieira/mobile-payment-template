@@ -9,9 +9,11 @@ import {
   stripeProvider,
   mercadoPagoProvider,
   abacatePayProvider,
+  googlePlayProvider,
 } from '@/lib/payment-providers'
 import {
   CreatePaymentInput,
+  CreateQuickPaymentInput,
   PaymentResult,
   PaymentError,
   PaymentProvider,
@@ -24,6 +26,7 @@ import { ORDER_STATUS, PAYMENT_PROVIDERS } from '@/constants'
 paymentProviderRegistry.register(stripeProvider)
 paymentProviderRegistry.register(mercadoPagoProvider)
 paymentProviderRegistry.register(abacatePayProvider)
+paymentProviderRegistry.register(googlePlayProvider)
 
 /**
  * Payment Service - Central business logic for payments
@@ -97,6 +100,127 @@ export class PaymentService {
     try {
       // Create payment with provider
       const result = await provider.createPayment(order, product, {
+        email: input.customerEmail,
+        name: input.customerName,
+        taxId: input.customerTaxId,
+        phone: input.customerPhone,
+      })
+
+      // Update order with provider payment ID if available
+      if (result.pixId || result.preferenceId || result.clientSecret) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            providerPaymentId: result.pixId || result.preferenceId,
+            expiresAt: result.expiresAt ? new Date(result.expiresAt) : undefined,
+            metadata: {
+              ...(order.metadata as object || {}),
+              clientSecret: result.clientSecret,
+              pixId: result.pixId,
+              brCode: result.brCode,
+              preferenceId: result.preferenceId,
+            },
+          },
+        })
+      }
+
+      // Create transaction record
+      await prisma.transaction.create({
+        data: {
+          orderId: order.id,
+          provider: providerName,
+          providerTxId: result.pixId || result.preferenceId || 'pending',
+          status: ORDER_STATUS.PENDING,
+          amount: order.amount,
+          rawResponse: result as any,
+        },
+      })
+
+      return result
+    } catch (error) {
+      // Update order to failed
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: ORDER_STATUS.FAILED },
+      })
+
+      // Log transaction failure
+      await prisma.transaction.create({
+        data: {
+          orderId: order.id,
+          provider: providerName,
+          providerTxId: 'error',
+          status: ORDER_STATUS.FAILED,
+          amount: order.amount,
+          rawResponse: { error: String(error) },
+        },
+      })
+
+      throw new PaymentError(
+        error instanceof Error ? error.message : 'Erro ao criar pagamento',
+        'PROVIDER_ERROR',
+        providerName,
+        error
+      )
+    }
+  }
+
+  /**
+   * Create a quick payment without a pre-registered product.
+   * Uses amount and description from the input directly.
+   */
+  async createQuickPayment(
+    providerName: PaymentProvider,
+    input: CreateQuickPaymentInput
+  ): Promise<PaymentResult> {
+    // Validate basic fields
+    if (!input.customerEmail) {
+      throw new PaymentError('customerEmail é obrigatório', 'INVALID_INPUT')
+    }
+    if (!input.amount || input.amount <= 0) {
+      throw new PaymentError('amount deve ser positivo', 'INVALID_INPUT')
+    }
+    if (!input.description) {
+      throw new PaymentError('description é obrigatória', 'INVALID_INPUT')
+    }
+
+    // Get provider
+    const provider = paymentProviderRegistry.get(providerName)
+    if (!provider.isConfigured()) {
+      throw new PaymentError(
+        `Provider ${providerName} não está configurado`,
+        'CONFIGURATION_ERROR',
+        providerName
+      )
+    }
+
+    // Determine payment method based on provider
+    const paymentMethod = this.getPaymentMethodForProvider(providerName)
+
+    // Create order without productId
+    const order = await prisma.order.create({
+      data: {
+        customerEmail: input.customerEmail,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        customerTaxId: input.customerTaxId,
+        description: input.description,
+        amount: input.amount,
+        currency: input.currency || 'BRL',
+        status: ORDER_STATUS.PENDING,
+        paymentMethod,
+        paymentProvider: providerName,
+        metadata: {
+          ...(input.metadata || {}),
+          description: input.description,
+          quickPayment: true,
+        },
+      },
+    })
+
+    try {
+      // Create payment with provider (product = null)
+      const result = await provider.createPayment(order, null, {
         email: input.customerEmail,
         name: input.customerName,
         taxId: input.customerTaxId,
@@ -313,6 +437,8 @@ export class PaymentService {
         return 'CREDIT_CARD'
       case PAYMENT_PROVIDERS.ABACATEPAY:
         return 'PIX'
+      case PAYMENT_PROVIDERS.GOOGLE_PLAY:
+        return 'IN_APP_PURCHASE'
       default:
         return 'CREDIT_CARD'
     }

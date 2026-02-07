@@ -25,7 +25,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Plus, Pencil, Trash2, Package, ShoppingCart } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Zap, Smartphone, Loader2, Copy, Check } from 'lucide-react'
 
 interface Product {
   id: string
@@ -42,6 +49,7 @@ interface Order {
   id: string
   customerEmail: string
   customerName: string | null
+  description: string | null
   amount: number
   currency: string
   status: string
@@ -49,7 +57,7 @@ interface Order {
   paymentProvider: string
   paidAt: string | null
   createdAt: string
-  product: Product
+  product: Product | null
 }
 
 export default function AdminPage() {
@@ -73,6 +81,28 @@ export default function AdminPage() {
     imageUrl: '',
     active: true,
   })
+
+  // Quick Payment state
+  const [quickPayment, setQuickPayment] = useState({
+    amount: '',
+    description: '',
+    customerEmail: '',
+    customerName: '',
+    paymentProvider: 'STRIPE',
+  })
+  const [quickPaymentResult, setQuickPaymentResult] = useState<string | null>(null)
+  const [quickPaymentLoading, setQuickPaymentLoading] = useState(false)
+  const [quickPaymentLink, setQuickPaymentLink] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
+
+  // Google Play state
+  const [gpValidation, setGpValidation] = useState({
+    productId: '',
+    purchaseToken: '',
+    packageName: '',
+  })
+  const [gpValidationResult, setGpValidationResult] = useState<Record<string, unknown> | null>(null)
+  const [gpValidationLoading, setGpValidationLoading] = useState(false)
 
   useEffect(() => {
     fetchProducts()
@@ -251,6 +281,83 @@ export default function AdminPage() {
     })
   }
 
+  // Quick Payment functions
+  async function handleQuickPayment(e: React.FormEvent) {
+    e.preventDefault()
+    setQuickPaymentLoading(true)
+    setQuickPaymentResult(null)
+
+    try {
+      const amountInCents = Math.round(parseFloat(quickPayment.amount) * 100)
+      const res = await fetch('/api/payments/quick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amountInCents,
+          currency: 'BRL',
+          description: quickPayment.description,
+          customerEmail: quickPayment.customerEmail,
+          customerName: quickPayment.customerName || undefined,
+          paymentProvider: quickPayment.paymentProvider,
+        }),
+      })
+
+      const data = await res.json()
+      if (res.ok) {
+        setQuickPaymentResult(`Pagamento criado! Order ID: ${data.orderId}`)
+        fetchOrders()
+      } else {
+        setQuickPaymentResult(`Erro: ${data.error || 'Falha ao criar pagamento'}`)
+      }
+    } catch (error) {
+      setQuickPaymentResult('Erro ao processar pagamento')
+      console.error(error)
+    } finally {
+      setQuickPaymentLoading(false)
+    }
+  }
+
+  function generateQuickCheckoutLink() {
+    const amountInCents = Math.round(parseFloat(quickPayment.amount) * 100)
+    const params = new URLSearchParams()
+    if (quickPayment.amount) params.set('amount', quickPayment.amount)
+    if (quickPayment.description) params.set('description', quickPayment.description)
+    if (quickPayment.customerEmail) params.set('email', quickPayment.customerEmail)
+    const link = `${window.location.origin}/quick-checkout?${params.toString()}`
+    setQuickPaymentLink(link)
+  }
+
+  function copyLink() {
+    if (quickPaymentLink) {
+      navigator.clipboard.writeText(quickPaymentLink)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    }
+  }
+
+  // Google Play functions
+  async function handleGpValidation(e: React.FormEvent) {
+    e.preventDefault()
+    setGpValidationLoading(true)
+    setGpValidationResult(null)
+
+    try {
+      const res = await fetch('/api/payments/google-play/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(gpValidation),
+      })
+
+      const data = await res.json()
+      setGpValidationResult(data)
+    } catch (error) {
+      setGpValidationResult({ error: 'Erro ao validar compra' })
+      console.error(error)
+    } finally {
+      setGpValidationLoading(false)
+    }
+  }
+
   function formatPrice(cents: number, currency: string) {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -290,6 +397,14 @@ export default function AdminPage() {
           <TabsTrigger value="orders" className="flex items-center gap-2">
             <ShoppingCart className="w-4 h-4" />
             Pedidos
+          </TabsTrigger>
+          <TabsTrigger value="quick-payment" className="flex items-center gap-2">
+            <Zap className="w-4 h-4" />
+            Quick Payment
+          </TabsTrigger>
+          <TabsTrigger value="google-play" className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4" />
+            Google Play
           </TabsTrigger>
         </TabsList>
 
@@ -509,7 +624,9 @@ export default function AdminPage() {
                           onCheckedChange={() => toggleOrderSelection(order.id)}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{order.product?.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {order.product?.name || order.description || <span className="text-gray-400 italic">Quick Payment</span>}
+                      </TableCell>
                       <TableCell>
                         <div>
                           <div>{order.customerEmail}</div>
@@ -542,6 +659,212 @@ export default function AdminPage() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="quick-payment">
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Gerar Cobranca Rapida</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleQuickPayment} className="space-y-4">
+                  <div>
+                    <Label htmlFor="qp-amount">Valor (R$)</Label>
+                    <Input
+                      id="qp-amount"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={quickPayment.amount}
+                      onChange={(e) => setQuickPayment({ ...quickPayment, amount: e.target.value })}
+                      placeholder="0,00"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="qp-description">Descricao</Label>
+                    <Input
+                      id="qp-description"
+                      value={quickPayment.description}
+                      onChange={(e) => setQuickPayment({ ...quickPayment, description: e.target.value })}
+                      placeholder="Ex: Consultoria, Produto X"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="qp-email">Email do Cliente</Label>
+                    <Input
+                      id="qp-email"
+                      type="email"
+                      value={quickPayment.customerEmail}
+                      onChange={(e) => setQuickPayment({ ...quickPayment, customerEmail: e.target.value })}
+                      placeholder="cliente@email.com"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="qp-name">Nome do Cliente</Label>
+                    <Input
+                      id="qp-name"
+                      value={quickPayment.customerName}
+                      onChange={(e) => setQuickPayment({ ...quickPayment, customerName: e.target.value })}
+                      placeholder="Nome do cliente"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="qp-provider">Gateway</Label>
+                    <Select
+                      value={quickPayment.paymentProvider}
+                      onValueChange={(value) => setQuickPayment({ ...quickPayment, paymentProvider: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="STRIPE">Stripe (Cartao)</SelectItem>
+                        <SelectItem value="MERCADOPAGO">Mercado Pago</SelectItem>
+                        <SelectItem value="ABACATEPAY">PIX (Abacate Pay)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button type="submit" disabled={quickPaymentLoading} className="flex-1">
+                      {quickPaymentLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      Criar Cobranca
+                    </Button>
+                    <Button type="button" variant="outline" onClick={generateQuickCheckoutLink}>
+                      Gerar Link
+                    </Button>
+                  </div>
+
+                  {quickPaymentResult && (
+                    <div className={`text-sm p-3 rounded ${quickPaymentResult.startsWith('Erro') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                      {quickPaymentResult}
+                    </div>
+                  )}
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Link de Checkout</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-gray-500">
+                  Gere um link de pagamento para enviar ao cliente. O link pre-preenche valor, descricao e email.
+                </p>
+
+                {quickPaymentLink ? (
+                  <div className="space-y-2">
+                    <Label>Link gerado</Label>
+                    <div className="flex gap-2">
+                      <Input value={quickPaymentLink} readOnly className="font-mono text-xs" />
+                      <Button variant="outline" onClick={copyLink}>
+                        {linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => window.open(quickPaymentLink, '_blank')}
+                    >
+                      Abrir em nova aba
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    Preencha os campos e clique em &quot;Gerar Link&quot; para criar um link de checkout.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="google-play">
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Validacao Manual</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleGpValidation} className="space-y-4">
+                  <div>
+                    <Label htmlFor="gp-package">Package Name</Label>
+                    <Input
+                      id="gp-package"
+                      value={gpValidation.packageName}
+                      onChange={(e) => setGpValidation({ ...gpValidation, packageName: e.target.value })}
+                      placeholder="com.example.app"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="gp-product">Product ID</Label>
+                    <Input
+                      id="gp-product"
+                      value={gpValidation.productId}
+                      onChange={(e) => setGpValidation({ ...gpValidation, productId: e.target.value })}
+                      placeholder="premium_monthly"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="gp-token">Purchase Token</Label>
+                    <Textarea
+                      id="gp-token"
+                      value={gpValidation.purchaseToken}
+                      onChange={(e) => setGpValidation({ ...gpValidation, purchaseToken: e.target.value })}
+                      placeholder="Token recebido do dispositivo Android"
+                      required
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={gpValidationLoading}>
+                    {gpValidationLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Validar Compra
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Resultado da Validacao</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {gpValidationResult ? (
+                  <pre className="bg-gray-50 p-4 rounded text-xs overflow-auto max-h-96">
+                    {JSON.stringify(gpValidationResult, null, 2)}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    Nenhuma validacao realizada ainda. Preencha os campos e clique em &quot;Validar Compra&quot;.
+                  </p>
+                )}
+
+                <div className="mt-4 space-y-2">
+                  <h4 className="font-medium text-sm">Configuracao</h4>
+                  <div className="text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">GOOGLE_PLAY_PACKAGE_NAME</span>
+                      <Badge variant={process.env.NEXT_PUBLIC_GOOGLE_PLAY_CONFIGURED === 'true' ? 'default' : 'secondary'}>
+                        {process.env.NEXT_PUBLIC_GOOGLE_PLAY_CONFIGURED === 'true' ? 'Configurado' : 'Pendente'}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Service Account</span>
+                      <Badge variant={process.env.NEXT_PUBLIC_GOOGLE_PLAY_CONFIGURED === 'true' ? 'default' : 'secondary'}>
+                        {process.env.NEXT_PUBLIC_GOOGLE_PLAY_CONFIGURED === 'true' ? 'Configurado' : 'Pendente'}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

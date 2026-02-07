@@ -86,7 +86,7 @@ export class InterPayoutService {
       )
     }
 
-    logger.info('Inter Payout Service initialized', {
+    logger.payment.info('Inter Payout Service initialized', {
       sandbox: config.sandbox,
       baseUrl: this.baseUrl,
     })
@@ -105,7 +105,7 @@ export class InterPayoutService {
       return this.accessToken
     }
 
-    logger.info('Requesting new Inter API token')
+    logger.payment.info('Requesting new Inter API token')
     const token = await this.authenticateOAuth2()
     this.accessToken = token.access_token
     this.tokenExpiresAt = Date.now() + (token.expires_in - 60) * 1000
@@ -286,7 +286,7 @@ export class InterPayoutService {
 
     const idempotencyKey = request.idempotencyKey || crypto.randomUUID()
 
-    logger.info('Sending PIX via Inter', {
+    logger.payment.info('Sending PIX via Inter', {
       amount: request.amount,
       pixKey: request.pixKey,
       idempotencyKey,
@@ -308,7 +308,7 @@ export class InterPayoutService {
         requestBody
       )
 
-      logger.info('PIX sent successfully', {
+      logger.payment.info('PIX sent successfully', {
         transferId: response.id,
         status: response.status,
       })
@@ -322,7 +322,7 @@ export class InterPayoutService {
         createdAt: new Date().toISOString(),
       }
     } catch (error: any) {
-      logger.error('PIX send failed', error)
+      logger.payment.error('PIX send failed', error)
       throw error
     }
   }
@@ -331,7 +331,7 @@ export class InterPayoutService {
    * Check transfer status
    */
   async getTransferStatus(transferId: string): Promise<PayoutResponse> {
-    logger.info('Checking transfer status', { transferId })
+    logger.payment.info('Checking transfer status', { transferId })
 
     try {
       const response = await this.makeRequest<any>(
@@ -348,7 +348,7 @@ export class InterPayoutService {
         createdAt: response.createdAt,
       }
     } catch (error: any) {
-      logger.error('Failed to check transfer status', error)
+      logger.payment.error('Failed to check transfer status', error)
       throw error
     }
   }
@@ -357,12 +357,12 @@ export class InterPayoutService {
    * Get account balance
    */
   async getAccountBalance(): Promise<any> {
-    logger.info('Fetching account balance')
+    logger.payment.info('Fetching account balance')
 
     try {
       return await this.makeRequest('GET', '/account/v1/balance')
     } catch (error: any) {
-      logger.error('Failed to fetch account balance', error)
+      logger.payment.error('Failed to fetch account balance', error)
       throw error
     }
   }

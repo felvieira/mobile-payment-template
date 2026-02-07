@@ -7,15 +7,15 @@ import { Order, Product } from '@prisma/client'
 /**
  * Supported payment providers
  */
-export type PaymentProvider = 'STRIPE' | 'MERCADOPAGO' | 'ABACATEPAY'
+export type PaymentProvider = 'STRIPE' | 'MERCADOPAGO' | 'ABACATEPAY' | 'GOOGLE_PLAY'
 
 /**
  * Supported payment methods
  */
-export type PaymentMethod = 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX' | 'BOLETO'
+export type PaymentMethod = 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX' | 'BOLETO' | 'IN_APP_PURCHASE'
 
 /**
- * Input for creating a new payment
+ * Input for creating a new payment (with product)
  */
 export interface CreatePaymentInput {
   productId: string
@@ -24,6 +24,20 @@ export interface CreatePaymentInput {
   customerPhone?: string // Phone for PIX
   customerTaxId?: string // CPF/CNPJ for PIX
   installments?: number // For Mercado Pago
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Input for creating a quick payment (without product)
+ */
+export interface CreateQuickPaymentInput {
+  amount: number // em centavos
+  currency?: string
+  description: string
+  customerEmail: string
+  customerName?: string
+  customerPhone?: string
+  customerTaxId?: string
   metadata?: Record<string, unknown>
 }
 
@@ -78,10 +92,25 @@ export interface WebhookResult {
 }
 
 /**
- * Order with product included
+ * Order with product included (product may be null for quick payments)
  */
 export interface OrderWithProduct extends Order {
-  product: Product
+  product: Product | null
+}
+
+/**
+ * Google Play purchase validation result
+ */
+export interface GooglePlayValidationResult {
+  valid: boolean
+  orderId?: string
+  productId: string
+  purchaseToken: string
+  packageName: string
+  expiryTime?: string
+  paymentState?: number
+  acknowledgementState?: number
+  rawResponse?: Record<string, unknown>
 }
 
 /**
@@ -118,3 +147,16 @@ export type PaymentErrorCode =
   | 'ORDER_NOT_FOUND'
   | 'ORDER_ALREADY_PAID'
   | 'CONFIGURATION_ERROR'
+  | 'GOOGLE_PLAY_VALIDATION_ERROR'
+  // Inter-specific error codes
+  | 'INTER_CERT_NOT_FOUND'
+  | 'INTER_KEY_NOT_FOUND'
+  | 'INTER_NOT_INITIALIZED'
+  | 'INTER_API_ERROR'
+  | 'CONFIG_MISSING'
+  | 'OAUTH_PARSE_ERROR'
+  | 'OAUTH_FAILED'
+  | 'OAUTH_CONNECTION_ERROR'
+  | 'AUTH_ERROR'
+  | 'PARSE_ERROR'
+  | 'CONNECTION_ERROR'
