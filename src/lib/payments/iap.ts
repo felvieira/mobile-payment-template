@@ -5,8 +5,12 @@
 
 export async function purchaseSubscription(productId: string): Promise<{ purchaseToken: string }> {
   // Dynamic import avoids SSR crash when running in web mode
-  const { invoke } = await import('@tauri-apps/api/core')
-  return invoke<{ purchaseToken: string }>('plugin:iap|purchase', { productId })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { invoke } = await import('@tauri-apps/api/core' as any)
+  return (invoke as (cmd: string, args: unknown) => Promise<{ purchaseToken: string }>)(
+    'plugin:iap|purchase',
+    { productId }
+  )
 }
 
 export async function validateOnServer(

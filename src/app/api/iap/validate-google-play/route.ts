@@ -102,11 +102,11 @@ export async function POST(request: NextRequest) {
                 productId,
                 packageName: resolvedPackageName,
                 acknowledged: false,
-                rawPayload: validationResult.rawResponse as Record<string, unknown>,
+                rawPayload: validationResult.rawResponse as unknown as never,
             },
             update: {
                 acknowledged: false,
-                rawPayload: validationResult.rawResponse as Record<string, unknown>,
+                rawPayload: validationResult.rawResponse as unknown as never,
             },
         })
 
@@ -123,12 +123,12 @@ export async function POST(request: NextRequest) {
                 status: 'active',
                 planId: productId,
                 currentPeriodEnd,
-                rawPayload: validationResult.rawResponse as Record<string, unknown>,
+                rawPayload: validationResult.rawResponse as unknown as never,
             },
             update: {
                 status: 'active',
                 currentPeriodEnd,
-                rawPayload: validationResult.rawResponse as Record<string, unknown>,
+                rawPayload: validationResult.rawResponse as unknown as never,
             },
         })
 

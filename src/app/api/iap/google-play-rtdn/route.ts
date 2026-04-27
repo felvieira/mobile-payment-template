@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
                     data: {
                         status: 'active',
                         currentPeriodEnd: new Date(real.expiryTime),
-                        rawPayload: real.rawResponse as Record<string, unknown>,
+                        rawPayload: real.rawResponse as unknown as never,
                     },
                 })
                 console.log(`[RTDN] ${eventName}: extended ${row.userId} to ${real.expiryTime}`)
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
                     data: {
                         status: 'active',
                         currentPeriodEnd: real.expiryTime ? new Date(real.expiryTime) : row.currentPeriodEnd,
-                        rawPayload: real.rawResponse as Record<string, unknown>,
+                        rawPayload: real.rawResponse as unknown as never,
                     },
                 })
                 console.log(`[RTDN] CANCELED: flagged ${row.userId} as cancel_at_period_end`)

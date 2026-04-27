@@ -45,11 +45,11 @@ export async function POST(request: NextRequest) {
               providerSubId: subscriptionId,
               status: 'active',
               planId: session.metadata?.planId ?? '',
-              rawPayload: session as unknown as Record<string, unknown>,
+              rawPayload: session as unknown as never,
             },
             update: {
               status: 'active',
-              rawPayload: session as unknown as Record<string, unknown>,
+              rawPayload: session as unknown as never,
             },
           })
           console.log('[Stripe] Subscription upserted for userId:', userId)
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
             data: {
               status: sub.status,
               currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000) : undefined,
-              rawPayload: sub as unknown as Record<string, unknown>,
+              rawPayload: sub as unknown as never,
             },
           })
           console.log('[Stripe] Subscription updated:', sub.id, 'status:', sub.status)
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
               providerTxId: paymentIntent.id,
               status: 'succeeded',
               amount: paymentIntent.amount,
-              rawResponse: paymentIntent as unknown as Record<string, unknown>,
+              rawResponse: paymentIntent as unknown as never,
             },
           })
 
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
               providerTxId: paymentIntent.id,
               status: 'failed',
               amount: paymentIntent.amount,
-              rawResponse: paymentIntent as unknown as Record<string, unknown>,
+              rawResponse: paymentIntent as unknown as never,
             },
           })
 
