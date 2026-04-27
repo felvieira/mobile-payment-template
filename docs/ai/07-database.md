@@ -136,24 +136,51 @@ const receipt = await prisma.iAPReceipt.findUnique({
 ## Migrations
 
 ```bash
-# After editing schema.prisma
-npx prisma migrate dev --name describe_your_change
+# After editing schema.prisma — creates migration file + applies locally
+npm run db:migrate                               # interactive (prompts for name)
+npx prisma migrate dev --name add_fcm_token      # with explicit name
 
-# Regenerate client (after migrate, or when DB is unavailable)
+# Regenerate client only (no DB needed — runs automatically on npm install)
 npx prisma generate
 
 # View DB in browser
-npx prisma studio
+npm run db:studio
+
+# Reset local DB (destructive — dev only)
+npm run db:reset
 ```
+
+### Automatic migrations on every deploy (production)
+
+`docker-entrypoint.sh` runs before the server starts on **every** container launch:
+
+```sh
+#!/bin/sh
+set -e
+npx prisma migrate deploy   # applies pending migrations — idempotent, never destructive
+exec node server.js
+```
+
+`prisma migrate deploy` is safe to run repeatedly — if no pending migrations exist, it exits in milliseconds.
+
+**Workflow for schema changes:**
+1. Edit `prisma/schema.prisma`
+2. `npm run db:migrate` → generates file in `prisma/migrations/`
+3. Commit both `schema.prisma` + the new migration file
+4. Push to `main` → Coolify redeploys → migration runs automatically before server starts
+
+No manual SSH or psql needed.
 
 ## Local database setup
 
 ```bash
-# Start Postgres with Docker
+# Start Postgres + app together (migrations run automatically on app container start)
 docker compose up -d
 
-# Run pending migrations
-npx prisma migrate dev
+# OR: run Next.js outside Docker (faster HMR)
+docker compose up db -d     # start only Postgres
+npm run db:migrate          # apply migrations
+npm run dev
 
 # DATABASE_URL in .env.local
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/payment_hub

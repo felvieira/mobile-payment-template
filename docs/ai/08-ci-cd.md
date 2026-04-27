@@ -84,7 +84,7 @@ on:
     branches: [main]
 ```
 
-Runs `bun run build` (SSR mode, without `NEXT_PUBLIC_TARGET=tauri`) to catch TypeScript/build errors before merge.
+Runs `npm run build` (SSR mode, without `NEXT_PUBLIC_TARGET=tauri`) to catch TypeScript/build errors before merge.
 
 ### Production deploy
 
@@ -96,14 +96,31 @@ on:
 
 Sends a webhook to Coolify, which pulls the latest `main` and rebuilds the Docker container.
 
+### Migrations run automatically on every deploy
+
+The production `Dockerfile` uses `docker-entrypoint.sh` as its `ENTRYPOINT`:
+
+```sh
+#!/bin/sh
+set -e
+echo "Running Prisma migrations..."
+npx prisma migrate deploy   # applies any pending migrations, safe to run repeatedly
+exec node server.js         # starts the Next.js server
+```
+
+`prisma migrate deploy` is idempotent — it only runs migrations that haven't been applied yet. It never rolls back or resets data. This means:
+- **Zero manual steps** when you push a schema change: deploy → migrations run automatically → server starts.
+- **Safe on re-deploy** of unchanged code: no pending migrations → exits instantly.
+
+To add a migration: edit `prisma/schema.prisma` → run `npm run db:migrate` locally → commit the generated migration file → push. Coolify will apply it automatically on next deploy.
+
 ### Coolify setup
 
 1. Coolify dashboard → New resource → Git repository
-2. Set build command: `bun run build`
-3. Set start command: `bun run start`
-4. Enable webhook deploy → copy webhook URL
-5. Add webhook URL as `COOLIFY_WEBHOOK_URL` GitHub secret
-6. Set all production env vars in Coolify UI (see `.env.prod` template)
+2. Set Dockerfile path: `Dockerfile` (uses the multi-stage prod image)
+3. Enable webhook deploy → copy webhook URL
+4. Add webhook URL as `COOLIFY_WEBHOOK_URL` GitHub secret
+5. Set all production env vars in Coolify UI (see `.env.prod` template)
 
 ### Environment files
 
