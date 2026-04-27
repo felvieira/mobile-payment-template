@@ -53,3 +53,9 @@ graphify-out/
 # Claude Code metadata (local only)
 .claude/
 CLAUDE.md
+
+# Android signing credentials (never commit these)
+android-signing/*.keystore
+android-signing/*.jks
+android-signing/keystore.properties
+android-signing/keystore.base64
