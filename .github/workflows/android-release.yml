@@ -1,0 +1,180 @@
+name: Android Release
+
+on:
+  workflow_dispatch:  # Allows manual triggering
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space and add swap
+        run: |
+          echo "=== Before cleanup ==="
+          df -h
+          free -h
+
+          # Remove large pre-installed packages
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /opt/hostedtoolcache/Python
+          sudo rm -rf /opt/hostedtoolcache/Ruby
+          sudo rm -rf /opt/hostedtoolcache/go
+          sudo rm -rf /opt/hostedtoolcache/node
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /opt/pipx
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/share/miniconda
+          sudo rm -rf /usr/local/julia*
+
+          # Remove apt cache and unnecessary packages
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+
+          # Docker cleanup
+          sudo docker image prune --all --force
+          sudo docker system prune --all --force --volumes
+
+          # Add swap space to prevent OOM during Rust compilation
+          echo "=== Adding 8GB swap space ==="
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+          echo "=== After cleanup ==="
+          df -h
+          free -h
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract app config
+        run: |
+          PACKAGE_NAME=$(node -e "const t = require('fs').readFileSync('app.config.ts','utf8'); console.log(t.match(/packageName:\s*'([^']+)'/)[1])")
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          APP_NAME=$(node -e "const t = require('fs').readFileSync('app.config.ts','utf8'); console.log(t.match(/name:\s*'([^']+)'/)[1])")
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Decode and save keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p android-signing
+          echo "$KEYSTORE_BASE64" | base64 -d > android-signing/app-release.keystore
+          echo "KEYSTORE_PATH=android-signing/app-release.keystore" > android-signing/keystore.properties
+          echo "KEYSTORE_ALIAS=${{ secrets.KEY_ALIAS }}" >> android-signing/keystore.properties
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> android-signing/keystore.properties
+          echo "KEY_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> android-signing/keystore.properties
+
+      - name: Create .env.android
+        run: |
+          cat > .env.android <<EOF
+          NEXTAUTH_URL=${{ secrets.NEXTAUTH_URL }}
+          NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+          NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+          EOF
+
+      - name: Setup Android dockerignore
+        run: |
+          # Use Android-specific dockerignore (includes src-tauri, android-icons, android-signing)
+          cp .dockerignore.android .dockerignore
+          echo "=== Using .dockerignore.android ==="
+          cat .dockerignore | head -20
+
+      - name: Build Docker image
+        run: docker build -f Dockerfile.android -t payment-hub-android-builder .
+
+      - name: Build Android app and extract artifacts
+        run: |
+          # Run build in container (container will stop after CMD completes)
+          docker run --name payment-hub-build payment-hub-android-builder
+
+          # Extract artifacts from stopped container using docker cp
+          mkdir -p android-release
+
+          # Copy APK - try signed first, then unsigned
+          if docker cp "payment-hub-build:/app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-signed.apk" android-release/app-signed.apk 2>/dev/null; then
+            echo "✅ Signed APK copied"
+          else
+            echo "⚠️ Signed APK not found, trying unsigned..."
+            docker cp "payment-hub-build:/app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk" android-release/app-unsigned.apk || true
+          fi
+
+          # Copy AAB - try signed first, then unsigned
+          if docker cp "payment-hub-build:/app/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-signed.aab" android-release/app-signed.aab 2>/dev/null; then
+            echo "✅ Signed AAB copied"
+          else
+            echo "⚠️ Signed AAB not found, trying unsigned..."
+            docker cp "payment-hub-build:/app/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab" android-release/app-unsigned.aab || true
+          fi
+
+          # Cleanup
+          docker rm payment-hub-build
+
+          echo "📦 Extracted files:"
+          ls -la android-release/
+
+      - name: Upload to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ env.PACKAGE_NAME }}
+          releaseFiles: android-release/app-signed.aab
+          track: production
+          status: completed
+          inAppUpdatePriority: 2
+          changesNotSentForReview: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            android-release/app-signed.apk
+            android-release/app-signed.aab
+          body: |
+            ## ${{ env.APP_NAME }} Android Release
+
+            ### Downloads
+            - **APK**: Para instalação direta em dispositivos Android
+            - **AAB**: Publicado na Google Play Store
+
+            ### Instalação
+            ```bash
+            adb install app-signed.apk
+            ```
+
+            Ou baixe da [Google Play Store](https://play.google.com/store/apps/details?id=${{ env.PACKAGE_NAME }})
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android-release/app-signed.apk
+          retention-days: 90
+
+      - name: Upload AAB as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: android-release/app-signed.aab
+          retention-days: 90
+
+      - name: Cleanup Android env
+        if: always()
+        run: rm -f .env.android

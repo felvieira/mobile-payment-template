@@ -1,0 +1,212 @@
+ # Dockerfile for building Tauri Android app
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Avoid sporadic 404s from security.ubuntu.com by using archive.ubuntu.com for all repos
+RUN ( \
+    if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+      sed -i \
+        -e 's|https://security\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+        -e 's|http://security\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+        /etc/apt/sources.list.d/ubuntu.sources; \
+    fi; \
+    if [ -f /etc/apt/sources.list ]; then \
+      sed -i \
+        -e 's|https://security\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+        -e 's|http://security\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+        /etc/apt/sources.list; \
+    fi \
+  )
+
+# Install base dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    unzip \
+    build-essential \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20.x
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Java 17
+RUN apt-get update && apt-get install -y openjdk-17-jdk \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install Android SDK Command Line Tools
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=${ANDROID_HOME}
+RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
+    cd ${ANDROID_HOME}/cmdline-tools && \
+    wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip && \
+    unzip commandlinetools-linux-11076708_latest.zip && \
+    rm commandlinetools-linux-11076708_latest.zip && \
+    mv cmdline-tools latest
+
+ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+
+# Accept licenses and install SDK packages
+RUN yes | sdkmanager --licenses && \
+    sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;29.0.14206865"
+
+# Install Rust Android targets
+RUN rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+# Configure Rust/Cargo for low memory usage (prevents OOM during compilation)
+ENV CARGO_BUILD_JOBS=1
+ENV RUSTFLAGS="-C codegen-units=1"
+ENV CARGO_INCREMENTAL=0
+
+# Create Cargo config to limit memory usage
+RUN mkdir -p /root/.cargo && echo '[build]\njobs = 1\n\n[profile.release]\ncodegen-units = 1\nlto = false\nopt-level = "s"\n' > /root/.cargo/config.toml
+
+# Set working directory
+WORKDIR /app
+
+# Copy project files using tar to preserve special characters in paths
+COPY . /tmp/project/
+RUN cd /tmp/project && tar cf - . | (cd /app && tar xf -) && rm -rf /tmp/project
+
+# Remove Windows node_modules and install fresh for Linux
+RUN rm -rf node_modules package-lock.json && npm install
+
+# Install Tauri CLI and Tailwind Linux bindings
+RUN npm install @tauri-apps/cli-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu tailwindcss-animate || true
+
+# Force rebuild of native modules for Linux x64
+RUN npm rebuild lightningcss @next/swc-linux-x64-gnu @tauri-apps/cli || true
+
+# Temporarily disable beforeBuildCommand in tauri.conf.json for Android build
+RUN sed -i 's/"beforeBuildCommand": "npm run build"/"beforeBuildCommand": ""/' src-tauri/tauri.conf.json
+
+# Add tauri script to package.json for Gradle
+RUN sed -i '/"scripts": {/a\    "tauri": "echo \\"Tauri command placeholder\\"",' package.json
+
+# Build the Next.js frontend for Tauri (static export)
+ENV PAYMENT_HUB_TAURI_ENV_FILE=.env.android
+
+# Optimize images before build (generates WebP versions, reduces bundle size)
+RUN echo "🖼️ Optimizing images..." && node scripts/prebuild-optimize.js || echo "⚠️ Image optimization skipped"
+
+RUN npm run build:tauri
+
+# Create android-signing directory (will be populated by CI or local files)
+RUN mkdir -p android-signing
+
+# Copy keystore files if they exist (for local builds)
+# For CI builds, the step before docker build creates these files
+COPY android-signing/. ./android-signing/
+
+# Copy custom Android icons
+COPY android-icons ./android-icons/
+
+# Copy Firebase config
+COPY firebase/google-services.json ./firebase/google-services.json
+
+# Create build and sign script using apksigner (correct for Android 7+)
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "🚀 Initializing Android project..."\n\
+rm -rf src-tauri/gen/android\n\
+\n\
+echo "📱 Initializing Tauri Android..."\n\
+npx tauri android init\n\
+\n\
+echo "🔥 Configuring Android native integrations..."\n\
+node /app/scripts/configure-android-project.js\n\
+echo "✅ Android native integrations configured!"\n\
+\n\
+echo "🎨 Copying custom icons..."\n\
+ANDROID_RES="/app/src-tauri/gen/android/app/src/main/res"\n\
+cp -v /app/android-icons/mipmap-mdpi/* $ANDROID_RES/mipmap-mdpi/ 2>/dev/null || true\n\
+cp -v /app/android-icons/mipmap-hdpi/* $ANDROID_RES/mipmap-hdpi/ 2>/dev/null || true\n\
+cp -v /app/android-icons/mipmap-xhdpi/* $ANDROID_RES/mipmap-xhdpi/ 2>/dev/null || true\n\
+cp -v /app/android-icons/mipmap-xxhdpi/* $ANDROID_RES/mipmap-xxhdpi/ 2>/dev/null || true\n\
+cp -v /app/android-icons/mipmap-xxxhdpi/* $ANDROID_RES/mipmap-xxxhdpi/ 2>/dev/null || true\n\
+echo "✅ Custom icons copied!"\n\
+\n\
+echo "🔨 Building Android app (ARM64 only to save memory)..."\n\
+echo "   CARGO_BUILD_JOBS=$CARGO_BUILD_JOBS"\n\
+echo "   RUSTFLAGS=$RUSTFLAGS"\n\
+# Build only for ARM64 (most common architecture)\n\
+npx tauri android build --target aarch64\n\
+\n\
+# Find the APK and AAB files (path varies based on target)\n\
+APK_UNSIGNED=$(find /app/src-tauri/gen/android/app/build/outputs/apk -name "*.apk" -type f | head -1)\n\
+AAB_UNSIGNED=$(find /app/src-tauri/gen/android/app/build/outputs/bundle -name "*.aab" -type f | head -1)\n\
+OUTPUT_DIR=$(dirname "$APK_UNSIGNED")\n\
+BUNDLE_DIR=$(dirname "$AAB_UNSIGNED")\n\
+APK_ALIGNED="$OUTPUT_DIR/app-aligned.apk"\n\
+APK_SIGNED="$OUTPUT_DIR/app-signed.apk"\n\
+AAB_SIGNED="$BUNDLE_DIR/app-signed.aab"\n\
+\n\
+echo "Found APK: $APK_UNSIGNED"\n\
+echo "Found AAB: $AAB_UNSIGNED"\n\
+\n\
+KEYSTORE="/app/android-signing/app-release.keystore"\n\
+BUILD_TOOLS="${ANDROID_HOME}/build-tools/34.0.0"\n\
+\n\
+if [ -f "$KEYSTORE" ]; then\n\
+    echo ""\n\
+    echo "📦 Aligning APK..."\n\
+    ${BUILD_TOOLS}/zipalign -v -p 4 "$APK_UNSIGNED" "$APK_ALIGNED"\n\
+    \n\
+    echo ""\n\
+    echo "🔐 Signing APK with apksigner (v2+v3 signatures)..."\n\
+    KEY_ALIAS=$(grep KEYSTORE_ALIAS /app/android-signing/keystore.properties | cut -d= -f2)\n\
+    STORE_PASS=$(grep KEYSTORE_PASSWORD /app/android-signing/keystore.properties | cut -d= -f2)\n\
+    KEY_PASS=$(grep KEY_PASSWORD /app/android-signing/keystore.properties | cut -d= -f2)\n\
+    ${BUILD_TOOLS}/apksigner sign \\\n\
+        --ks "$KEYSTORE" \\\n\
+        --ks-key-alias "$KEY_ALIAS" \\\n\
+        --ks-pass "pass:$STORE_PASS" \\\n\
+        --key-pass "pass:$KEY_PASS" \\\n\
+        --out "$APK_SIGNED" \\\n\
+        "$APK_ALIGNED"\n\
+    \n\
+    echo ""\n\
+    echo "✅ Verifying APK signature..."\n\
+    ${BUILD_TOOLS}/apksigner verify --verbose "$APK_SIGNED"\n\
+    \n\
+    echo ""\n\
+    echo "🔐 Signing AAB with jarsigner..."\n\
+    jarsigner -verbose \\\n\
+        -sigalg SHA256withRSA \\\n\
+        -digestalg SHA-256 \\\n\
+        -keystore "$KEYSTORE" \\\n\
+        -storepass "$STORE_PASS" \\\n\
+        -keypass "$KEY_PASS" \\\n\
+        "$AAB_UNSIGNED" \\\n\
+        "$KEY_ALIAS"\n\
+    \n\
+    mv "$AAB_UNSIGNED" "$AAB_SIGNED"\n\
+    rm -f "$APK_ALIGNED"\n\
+    \n\
+    echo ""\n\
+    echo "✅ APK and AAB signed successfully!"\n\
+    echo "📦 Signed APK: $APK_SIGNED"\n\
+    echo "📦 Signed AAB: $AAB_SIGNED"\n\
+else\n\
+    echo ""\n\
+    echo "⚠️  Keystore not found. APK and AAB remain unsigned."\n\
+    echo "📦 Unsigned APK: $APK_UNSIGNED"\n\
+    echo "📦 Unsigned AAB: $AAB_UNSIGNED"\n\
+fi\n\
+' > /app/build-and-sign.sh && chmod +x /app/build-and-sign.sh
+
+# Run build and sign
+CMD ["/app/build-and-sign.sh"]

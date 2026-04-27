@@ -1,0 +1,68 @@
+# Docker files
+Dockerfile
+.dockerignore
+
+# Dependencies (will be reinstalled in container)
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Git
+.git
+
+# Environment (use .env.tauri in container)
+.env*.local
+.env.development
+.env.production
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Android build outputs (don't copy old builds)
+android-release
+*.apk
+*.aab
+
+# Large asset source files (NOT needed - already optimized in public/)
+assets/illustrations-source
+originals-hq
+BASE
+screenshots
+
+# Google configs (OAuth keys etc)
+google
+
+# Design files
+.superdesign
+
+# Testing
+test-results*
+.playwright-mcp
+e2e
+playwright-report
+coverage
+
+# Logs and temp files
+build_log*.txt
+build.log
+*.log
+*.tsbuildinfo
+logcat.txt
+
+# Documentation
+docs
+
+# Misc
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
