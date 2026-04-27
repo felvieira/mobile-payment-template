@@ -87,3 +87,38 @@ enum PaymentProvider {
   ABACATEPAY
   GOOGLE_PLAY
 }
+
+model Subscription {
+  id               String          @id @default(cuid())
+  userId           String
+  customerEmail    String
+  provider         PaymentProvider
+  providerSubId    String
+  status           String
+  planId           String
+  currentPeriodEnd DateTime?
+  rawPayload       Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([provider, providerSubId])
+  @@index([userId])
+  @@index([customerEmail])
+  @@index([status])
+}
+
+model IAPReceipt {
+  id             String   @id @default(cuid())
+  userId         String
+  customerEmail  String
+  purchaseToken  String   @unique
+  productId      String
+  packageName    String
+  acknowledged   Boolean  @default(false)
+  rawPayload     Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([customerEmail])
+}
