@@ -60,3 +60,5 @@ android-signing/*.keystore
 android-signing/*.jks
 android-signing/keystore.properties
 android-signing/keystore.base64
+playwright-report/
+test-results/
