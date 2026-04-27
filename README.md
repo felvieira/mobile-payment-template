@@ -1,5 +1,33 @@
 # Payment Hub
 
+> **Template repo** — fork this to build new mobile apps with payments, IAP, notifications, and CI already wired. See [TEMPLATE.md](TEMPLATE.md) for the replication guide.
+
+## Quick start (web)
+
+```bash
+npm install
+cp .env.example .env.local  # fill in test keys
+npx prisma generate
+npm run dev                  # http://localhost:3000
+```
+
+## Quick start (Android)
+
+Prerequisites: Rust, Android Studio, NDK r25+, Java 17
+
+```bash
+npm run tauri:android:init   # one-time: generates src-tauri/gen/android/
+node scripts/configure-android-project.js
+npm run tauri:android:dev    # opens app in connected device/emulator
+```
+
+## Paywall demo
+
+- Web: http://localhost:3000/paywall — shows Stripe / MercadoPago / PIX buttons
+- Android: shows Google Play IAP button only (Play Store compliance)
+
+---
+
 Sistema de pagamentos universal com admin para loja de produtos virtuais. Suporta Stripe, Mercado Pago, PIX (Abacate Pay) e pagamentos diretos via Banco Inter com precos dinamicos.
 
 ## Recursos
