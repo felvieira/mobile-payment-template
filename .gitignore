@@ -42,6 +42,11 @@ next-env.d.ts
 
 /src/generated/prisma
 
+# Tauri build artifacts
+src-tauri/gen/
+src-tauri/target/
+src-tauri/Cargo.lock
+
 # Graphify knowledge graph (local only)
 graphify-out/
 

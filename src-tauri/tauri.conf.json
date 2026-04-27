@@ -1,0 +1,42 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Payment Hub Demo",
+  "version": "0.1.0",
+  "identifier": "com.payment_hub.demo",
+  "build": {
+    "frontendDist": "../out",
+    "beforeBuildCommand": "npm run build:tauri"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Payment Hub Demo",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "deepLink": {
+      "mobile": {
+        "scheme": "payment-hub"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
