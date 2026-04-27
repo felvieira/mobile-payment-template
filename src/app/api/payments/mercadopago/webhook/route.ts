@@ -72,6 +72,31 @@ export async function POST(request: NextRequest) {
         },
       })
 
+      // Upsert Subscription for subscription-based payments
+      const userId = payment.metadata?.userId ?? payment.external_reference
+      const preapprovalId = payment.preapproval_id ?? paymentId.toString()
+      if (userId) {
+        await prisma.subscription.upsert({
+          where: {
+            provider_providerSubId: { provider: 'MERCADOPAGO', providerSubId: String(preapprovalId) },
+          },
+          create: {
+            userId: String(userId),
+            customerEmail: payment.payer?.email ?? existingOrder.customerEmail,
+            provider: 'MERCADOPAGO',
+            providerSubId: String(preapprovalId),
+            status: 'active',
+            planId: payment.description ?? orderId,
+            rawPayload: payment,
+          },
+          update: {
+            status: 'active',
+            rawPayload: payment,
+          },
+        })
+        console.log('[MercadoPago] Subscription upserted for userId:', userId)
+      }
+
       console.log('Pagamento Mercado Pago aprovado:', orderId)
     } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
       await prisma.order.update({
