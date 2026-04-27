@@ -1,7 +1,11 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
-const nextConfig: NextConfig = {
-  /* config options here */
-};
+const isTauri = process.env.NEXT_PUBLIC_TARGET === 'tauri'
 
-export default nextConfig;
+const config: NextConfig = {
+  output: isTauri ? 'export' : undefined,
+  images: { unoptimized: isTauri },
+  trailingSlash: isTauri,
+}
+
+export default config

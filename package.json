@@ -12,7 +12,12 @@
     "test:headed": "playwright test --headed",
     "test:stripe": "playwright test stripe-payment.spec.ts",
     "test:mercadopago": "playwright test mercadopago-payment.spec.ts",
-    "test:pix": "playwright test pix-payment.spec.ts"
+    "test:pix": "playwright test pix-payment.spec.ts",
+    "build:tauri": "cross-env NEXT_PUBLIC_TARGET=tauri next build",
+    "tauri:dev": "tauri dev",
+    "tauri:android:init": "tauri android init",
+    "tauri:android:dev": "cross-env NEXT_PUBLIC_TARGET=tauri tauri android dev",
+    "tauri:android:build": "cross-env NEXT_PUBLIC_TARGET=tauri tauri android build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -57,6 +62,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.5",
     "tailwindcss": "^4",
