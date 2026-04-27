@@ -26,6 +26,58 @@ export async function POST(request: NextRequest) {
     }
 
     switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session
+        const userId = session.metadata?.userId
+        const subscriptionId = typeof session.subscription === 'string'
+          ? session.subscription
+          : session.subscription?.id
+
+        if (userId && subscriptionId) {
+          await prisma.subscription.upsert({
+            where: {
+              provider_providerSubId: { provider: 'STRIPE', providerSubId: subscriptionId },
+            },
+            create: {
+              userId,
+              customerEmail: session.customer_email ?? '',
+              provider: 'STRIPE',
+              providerSubId: subscriptionId,
+              status: 'active',
+              planId: session.metadata?.planId ?? '',
+              rawPayload: session as unknown as Record<string, unknown>,
+            },
+            update: {
+              status: 'active',
+              rawPayload: session as unknown as Record<string, unknown>,
+            },
+          })
+          console.log('[Stripe] Subscription upserted for userId:', userId)
+        }
+        break
+      }
+
+      case 'customer.subscription.updated': {
+        const sub = event.data.object as Stripe.Subscription
+        const existingSub = await prisma.subscription.findFirst({
+          where: { provider: 'STRIPE', providerSubId: sub.id },
+        })
+
+        if (existingSub) {
+          const currentPeriodEnd = (sub as unknown as { current_period_end?: number }).current_period_end
+          await prisma.subscription.update({
+            where: { id: existingSub.id },
+            data: {
+              status: sub.status,
+              currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000) : undefined,
+              rawPayload: sub as unknown as Record<string, unknown>,
+            },
+          })
+          console.log('[Stripe] Subscription updated:', sub.id, 'status:', sub.status)
+        }
+        break
+      }
+
       case 'payment_intent.succeeded': {
         const paymentIntent = event.data.object as Stripe.PaymentIntent
         const orderId = paymentIntent.metadata?.orderId
@@ -58,7 +110,7 @@ export async function POST(request: NextRequest) {
               providerTxId: paymentIntent.id,
               status: 'succeeded',
               amount: paymentIntent.amount,
-              rawResponse: paymentIntent as any,
+              rawResponse: paymentIntent as unknown as Record<string, unknown>,
             },
           })
 
@@ -84,7 +136,7 @@ export async function POST(request: NextRequest) {
               providerTxId: paymentIntent.id,
               status: 'failed',
               amount: paymentIntent.amount,
-              rawResponse: paymentIntent as any,
+              rawResponse: paymentIntent as unknown as Record<string, unknown>,
             },
           })
 
