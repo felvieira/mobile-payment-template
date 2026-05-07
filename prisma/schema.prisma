@@ -89,22 +89,29 @@ enum PaymentProvider {
 }
 
 model Subscription {
-  id               String          @id @default(cuid())
-  userId           String
-  customerEmail    String
-  provider         PaymentProvider
-  providerSubId    String
-  status           String
-  planId           String
-  currentPeriodEnd DateTime?
-  rawPayload       Json?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                 String          @id @default(cuid())
+  userId             String
+  customerEmail      String
+  provider           PaymentProvider
+  providerSubId      String
+  status             String
+  planId             String
+  currentPeriodEnd   DateTime?
+  currentPeriodStart DateTime?
+  platform           String?         // web | google_play | app_store
+  source             String?         // web | app
+  productId          String?         // Google Play product/subscription ID
+  purchaseToken      String?         // Google Play purchase token
+  cancelAtPeriodEnd  Boolean         @default(false)
+  rawPayload         Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   @@unique([provider, providerSubId])
   @@index([userId])
   @@index([customerEmail])
   @@index([status])
+  @@index([purchaseToken])
 }
 
 model IAPReceipt {

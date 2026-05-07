@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { validateGooglePlaySubscription } from '@/lib/google-play-validator'
+import { validateGooglePlaySubscription } from '@/lib/google-play/validator'
+import { GOOGLE_PLAY_PACKAGE_NAME, VALID_GOOGLE_PLAY_PRODUCT_IDS } from '@/lib/google-play/subscription-config'
 
 // CORS headers for Tauri app
 const corsHeaders = {
@@ -16,15 +18,11 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
-    let userId: string | null = null
-
     try {
         const body = await request.json()
-        const { productId, purchaseToken, packageName, userId: bodyUserId, autoRenewing } = body as {
+        const { productId, purchaseToken, autoRenewing } = body as {
             productId: string
             purchaseToken: string
-            packageName?: string
-            userId: string
             autoRenewing?: boolean
         }
 
@@ -41,36 +39,46 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        if (!bodyUserId) {
+        if (!VALID_GOOGLE_PLAY_PRODUCT_IDS.includes(productId)) {
+            console.log('[IAP Server] Invalid product ID:', productId, 'expected one of:', VALID_GOOGLE_PLAY_PRODUCT_IDS)
             return NextResponse.json(
-                { error: 'Missing userId' },
+                { error: 'Invalid product ID' },
                 { status: 400, headers: corsHeaders }
             )
         }
 
-        userId = bodyUserId
-        const resolvedPackageName = packageName ?? process.env.GOOGLE_PLAY_PACKAGE_NAME ?? ''
+        // Auth: NextAuth v5 session
+        const session = await auth()
+        const userId: string | null =
+            (session?.user as ({ id?: string; email?: string | null }) | undefined)?.id ||
+            session?.user?.email ||
+            null
 
-        console.log('[IAP Server] User:', userId)
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders })
+        }
+
+        console.log('[IAP Server] User authenticated:', userId)
 
         // Validate purchase with Google Play Developer API
-        const validationResult = await validateGooglePlaySubscription(
-            resolvedPackageName,
+        const result = await validateGooglePlaySubscription(
+            GOOGLE_PLAY_PACKAGE_NAME,
             productId,
             purchaseToken
         )
 
         console.log('[IAP Server] Validation result:', {
-            valid: validationResult.valid,
-            expiryTime: validationResult.expiryTime,
-            error: (validationResult as { error?: string }).error,
+            isValid: result.isValid,
+            expiryDate: result.expiryDate,
+            autoRenewing: result.autoRenewing,
+            error: result.error,
         })
 
         // If validation failed and credentials are configured, reject the purchase
-        if (!validationResult.valid && !(validationResult as { error?: string }).error?.includes('not configured')) {
+        if (!result.isValid && !result.error?.includes('not configured')) {
             console.log('[IAP Server] Purchase validation failed')
             return NextResponse.json(
-                { error: 'Invalid purchase', details: (validationResult as { error?: string }).error },
+                { error: 'Invalid purchase', details: result.error },
                 { status: 400, headers: corsHeaders }
             )
         }
@@ -80,34 +88,17 @@ export async function POST(request: NextRequest) {
         let currentPeriodEnd: Date
         let cancelAtPeriodEnd: boolean
 
-        if (validationResult.valid && validationResult.expiryTime) {
-            // Use real data from Google Play
-            currentPeriodEnd = new Date(validationResult.expiryTime)
-            cancelAtPeriodEnd = validationResult.acknowledgementState === 0
+        if (result.isValid) {
+            currentPeriodEnd = result.expiryDate
+            cancelAtPeriodEnd = !result.autoRenewing
         } else {
-            // Fallback: trust client data (when credentials not configured)
             console.warn('[IAP Server] Using client-provided data (Google Play validation not available)')
-            currentPeriodEnd = new Date(now)
-            currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1)
+            currentPeriodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
             cancelAtPeriodEnd = typeof autoRenewing === 'boolean' ? !autoRenewing : false
         }
 
-        // Upsert IAPReceipt
-        await prisma.iAPReceipt.upsert({
-            where: { purchaseToken },
-            create: {
-                userId,
-                customerEmail: '',
-                purchaseToken,
-                productId,
-                packageName: resolvedPackageName,
-                acknowledged: false,
-                rawPayload: validationResult.rawResponse as unknown as never,
-            },
-            update: {
-                acknowledged: false,
-                rawPayload: validationResult.rawResponse as unknown as never,
-            },
+        const user = await prisma.user.findFirst({
+            where: { OR: [{ id: userId }, { email: userId }] },
         })
 
         // Upsert Subscription
@@ -116,21 +107,49 @@ export async function POST(request: NextRequest) {
                 provider_providerSubId: { provider: 'GOOGLE_PLAY', providerSubId: purchaseToken },
             },
             create: {
-                userId,
-                customerEmail: '',
+                userId: user?.id ?? userId,
+                customerEmail: user?.email ?? userId,
                 provider: 'GOOGLE_PLAY',
                 providerSubId: purchaseToken,
                 status: 'active',
                 planId: productId,
+                platform: 'google_play',
+                source: 'app',
+                productId,
+                purchaseToken,
+                currentPeriodStart: now,
                 currentPeriodEnd,
-                rawPayload: validationResult.rawResponse as unknown as never,
+                cancelAtPeriodEnd,
             },
             update: {
                 status: 'active',
+                platform: 'google_play',
+                source: 'app',
+                productId,
+                purchaseToken,
+                currentPeriodStart: now,
                 currentPeriodEnd,
-                rawPayload: validationResult.rawResponse as unknown as never,
+                cancelAtPeriodEnd,
+                updatedAt: now,
             },
         })
+
+        // Log the receipt
+        await prisma.iAPReceipt.upsert({
+            where: { purchaseToken },
+            update: { acknowledged: true, updatedAt: now },
+            create: {
+                userId: user?.id ?? userId,
+                customerEmail: user?.email ?? userId,
+                purchaseToken,
+                productId,
+                packageName: GOOGLE_PLAY_PACKAGE_NAME,
+                acknowledged: true,
+                rawPayload: { productId, autoRenewing, validatedAt: now.toISOString() },
+            },
+        })
+
+        console.log('[IAP Server] Subscription saved successfully')
 
         return NextResponse.json({
             success: true,

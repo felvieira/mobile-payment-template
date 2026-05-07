@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { validateGooglePlaySubscription } from '@/lib/google-play-validator'
+import { validateGooglePlaySubscription } from '@/lib/google-play/validator'
+import { GOOGLE_PLAY_PACKAGE_NAME } from '@/lib/google-play/subscription-config'
 
 /**
  * Google Play Real-Time Developer Notifications (RTDN) webhook.
@@ -93,12 +94,15 @@ export async function POST(request: NextRequest) {
             console.log('[RTDN] Voided purchase:', v)
             if (v.purchaseToken) {
                 const sub = await prisma.subscription.findFirst({
-                    where: { provider: 'GOOGLE_PLAY', providerSubId: v.purchaseToken },
+                    where: {
+                        provider: 'GOOGLE_PLAY',
+                        OR: [{ purchaseToken: v.purchaseToken }, { providerSubId: v.purchaseToken }],
+                    },
                 })
                 if (sub) {
                     await prisma.subscription.update({
                         where: { id: sub.id },
-                        data: { status: 'canceled' },
+                        data: { status: 'canceled', cancelAtPeriodEnd: true },
                     })
                 }
             }
@@ -126,11 +130,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ received: true, warning: 'missing fields' })
         }
 
-        const packageName = (notification.packageName as string) ?? process.env.GOOGLE_PLAY_PACKAGE_NAME ?? ''
-
-        // Look up user by purchase token
+        // Look up user by purchase token (prefer purchaseToken field, fall back to providerSubId)
         const row = await prisma.subscription.findFirst({
-            where: { provider: 'GOOGLE_PLAY', providerSubId: purchaseToken },
+            where: {
+                provider: 'GOOGLE_PLAY',
+                OR: [{ purchaseToken }, { providerSubId: purchaseToken }],
+            },
         })
 
         if (!row) {
@@ -140,40 +145,51 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ received: true, user_not_found: true })
         }
 
+        const now = new Date()
+
         if (notificationType !== undefined && ACTIVE_TYPES.has(notificationType)) {
-            const real = await validateGooglePlaySubscription(packageName, subscriptionId, purchaseToken)
-            if (real.valid && real.expiryTime) {
+            const real = await validateGooglePlaySubscription(GOOGLE_PLAY_PACKAGE_NAME, subscriptionId, purchaseToken)
+            if (real.isValid) {
                 await prisma.subscription.update({
                     where: { id: row.id },
                     data: {
                         status: 'active',
-                        currentPeriodEnd: new Date(real.expiryTime),
-                        rawPayload: real.rawResponse as unknown as never,
+                        platform: 'google_play',
+                        source: 'app',
+                        productId: subscriptionId,
+                        purchaseToken,
+                        currentPeriodStart: now,
+                        currentPeriodEnd: real.expiryDate,
+                        cancelAtPeriodEnd: !real.autoRenewing,
                     },
                 })
-                console.log(`[RTDN] ${eventName}: extended ${row.userId} to ${real.expiryTime}`)
+                console.log(`[RTDN] ${eventName}: extended ${row.userId} to ${real.expiryDate.toISOString()}`)
             } else {
-                console.warn(`[RTDN] ${eventName} but Google Play validator says invalid:`, (real as { error?: string }).error)
+                console.warn(`[RTDN] ${eventName} but Google Play validator says invalid:`, real.error)
             }
         } else if (notificationType !== undefined && INACTIVE_TYPES.has(notificationType)) {
             if (notificationType === 3) {
-                // User cancelled — keep active, just flag cancel_at_period_end via status
-                const real = await validateGooglePlaySubscription(packageName, subscriptionId, purchaseToken)
+                // User cancelled — keep active, just flag cancelAtPeriodEnd
+                const real = await validateGooglePlaySubscription(GOOGLE_PLAY_PACKAGE_NAME, subscriptionId, purchaseToken)
                 await prisma.subscription.update({
                     where: { id: row.id },
                     data: {
                         status: 'active',
-                        currentPeriodEnd: real.expiryTime ? new Date(real.expiryTime) : row.currentPeriodEnd,
-                        rawPayload: real.rawResponse as unknown as never,
+                        platform: 'google_play',
+                        source: 'app',
+                        productId: subscriptionId,
+                        purchaseToken,
+                        currentPeriodEnd: real.expiryDate ?? row.currentPeriodEnd,
+                        cancelAtPeriodEnd: true,
                     },
                 })
-                console.log(`[RTDN] CANCELED: flagged ${row.userId} as cancel_at_period_end`)
+                console.log(`[RTDN] CANCELED: flagged ${row.userId} as cancelAtPeriodEnd`)
             } else {
                 // EXPIRED / REVOKED / ON_HOLD / PAUSED — remove access
                 const newStatus = notificationType === 13 ? 'expired' : 'canceled'
                 await prisma.subscription.update({
                     where: { id: row.id },
-                    data: { status: newStatus },
+                    data: { status: newStatus, cancelAtPeriodEnd: true },
                 })
                 console.log(`[RTDN] ${eventName}: marked ${row.userId} as ${newStatus}`)
             }
