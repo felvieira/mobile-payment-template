@@ -10,6 +10,7 @@ import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react'
 import { EnvBadge } from '../_components/EnvBadge'
 import { StripeTestCardsTable } from '../_components/StripeTestCardsTable'
 import { StripeElementsForm } from '@/components/payments/stripe/StripeElementsForm'
+import { SetupGuide } from '../_components/SetupGuide'
 
 interface Product {
   id: string
@@ -98,11 +99,115 @@ export default function StripeSandboxPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Tabs defaultValue="elements">
+          <Tabs defaultValue="setup">
             <TabsList className="mb-4">
+              <TabsTrigger value="setup">📘 Setup</TabsTrigger>
               <TabsTrigger value="elements">Payment Elements</TabsTrigger>
               <TabsTrigger value="info">Sobre o Stripe</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="setup">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Como configurar o Stripe</CardTitle>
+                  <CardDescription>
+                    Passo a passo: criar conta, pegar API keys, criar produto, configurar webhook.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SetupGuide
+                    title="Setup Stripe — Test + Live"
+                    subtitle="Total: ~10 minutos. Use Test mode para tudo até deploy em produção."
+                    steps={[
+                      {
+                        num: 1,
+                        title: 'Criar conta no Stripe',
+                        desc: 'Cadastre-se com email. Não precisa preencher dados bancários para usar test mode.',
+                        href: 'https://dashboard.stripe.com/register',
+                        type: 'reusable',
+                      },
+                      {
+                        num: 2,
+                        title: 'Copiar API Keys de TESTE',
+                        desc: 'No dashboard, ative o toggle "Test mode" (canto superior direito). Vá em Developers → API keys.',
+                        href: 'https://dashboard.stripe.com/test/apikeys',
+                        type: 'reusable',
+                        copy: 'STRIPE_SECRET_KEY=sk_test_...\nNEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...',
+                        bullets: [
+                          'Publishable key (começa com pk_test_) → cliente',
+                          'Secret key (começa com sk_test_) → servidor',
+                          'Cole em .env.local',
+                        ],
+                      },
+                      {
+                        num: 3,
+                        title: 'Copiar API Keys de PRODUÇÃO',
+                        desc: 'Desative "Test mode" e copie as keys live (sk_live_ e pk_live_). Para isso você precisa ativar a conta com dados bancários e validação.',
+                        href: 'https://dashboard.stripe.com/apikeys',
+                        type: 'reusable',
+                        copy: 'STRIPE_SECRET_KEY=sk_live_...\nNEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...',
+                      },
+                      {
+                        num: 4,
+                        title: 'Criar produto e Price ID',
+                        desc: 'Vá em Products → Add product. Crie seu produto com preço recorrente (subscription) ou único.',
+                        href: 'https://dashboard.stripe.com/test/products',
+                        type: 'per-app',
+                        copy: 'STRIPE_AI_PRICE_ID=price_xxx\nSTRIPE_AI_ANNUAL_PRICE_ID=price_xxx',
+                        bullets: [
+                          'Crie 1 produto mensal → copie o Price ID (price_xxx)',
+                          'Crie 1 produto anual → copie outro Price ID',
+                          'Sem o Price ID o sandbox/checkout NÃO funciona',
+                        ],
+                      },
+                      {
+                        num: 5,
+                        title: 'Configurar Webhook',
+                        desc: 'Em Developers → Webhooks → Add endpoint. URL deve ser pública (use ngrok em dev). Selecione os eventos relevantes.',
+                        href: 'https://dashboard.stripe.com/test/webhooks',
+                        type: 'per-app',
+                        copy: 'https://seu-dominio.com/api/payments/stripe/webhook',
+                        bullets: [
+                          'Eventos: payment_intent.succeeded, payment_intent.payment_failed',
+                          'Eventos: checkout.session.completed, customer.subscription.* (se usar subscriptions)',
+                          'Para dev local: instale Stripe CLI e use stripe listen --forward-to localhost:3000/api/payments/stripe/webhook',
+                        ],
+                      },
+                      {
+                        num: 6,
+                        title: 'Copiar Webhook Secret',
+                        desc: 'Após criar o endpoint, na tela do webhook, em "Signing secret" → Reveal. Cole em STRIPE_WEBHOOK_SECRET.',
+                        type: 'per-app',
+                        copy: 'STRIPE_WEBHOOK_SECRET=whsec_xxx',
+                      },
+                      {
+                        num: 7,
+                        title: 'Testar no sandbox',
+                        desc: 'Volte aqui na aba "Payment Elements". Use os cartões de teste da sidebar (4242 4242 4242 4242 = aprovado, 4000 0000 0000 0002 = recusado).',
+                        type: 'per-app',
+                      },
+                      {
+                        num: 8,
+                        title: '(Opcional) Stripe CLI para dev local',
+                        desc: 'Instale o Stripe CLI para receber webhooks no localhost sem ngrok. stripe listen redireciona eventos do dashboard para sua máquina.',
+                        href: 'https://stripe.com/docs/stripe-cli',
+                        type: 'per-app',
+                        copy: 'stripe listen --forward-to localhost:3000/api/payments/stripe/webhook',
+                      },
+                    ]}
+                    links={[
+                      { label: 'Dashboard Stripe', href: 'https://dashboard.stripe.com' },
+                      { label: 'API Keys (test)', href: 'https://dashboard.stripe.com/test/apikeys' },
+                      { label: 'Products', href: 'https://dashboard.stripe.com/test/products' },
+                      { label: 'Webhooks', href: 'https://dashboard.stripe.com/test/webhooks' },
+                      { label: 'Cartões de teste', href: 'https://stripe.com/docs/testing' },
+                      { label: 'Stripe CLI', href: 'https://stripe.com/docs/stripe-cli' },
+                      { label: 'Docs Payment Intents', href: 'https://stripe.com/docs/payments/payment-intents' },
+                    ]}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="elements">
               <Card>
