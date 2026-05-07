@@ -1,0 +1,8 @@
+export { CheckoutProButton } from './CheckoutProButton'
+export { TransparentCardForm } from './TransparentCardForm'
+export { TransparentPixQR } from './TransparentPixQR'
+export { TransparentBoleto } from './TransparentBoleto'
+export { BricksPayment } from './BricksPayment'
+export { BricksCard } from './BricksCard'
+export { BricksStatus } from './BricksStatus'
+export { BricksWallet } from './BricksWallet'
