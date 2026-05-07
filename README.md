@@ -28,19 +28,17 @@ npm run tauri:android:dev    # opens app in connected device/emulator
 
 ---
 
-Sistema de pagamentos universal com admin para loja de produtos virtuais. Suporta Stripe, Mercado Pago, PIX (Abacate Pay) e pagamentos diretos via Banco Inter com precos dinamicos.
+Sistema de pagamentos universal com admin para loja de produtos virtuais. Suporta Stripe, Mercado Pago e PIX (Abacate Pay) com precos dinamicos.
 
 ## Recursos
 
 - **Admin Dashboard**: CRUD de produtos e listagem de pedidos
 - **Loja Virtual**: Catalogo de produtos com checkout integrado
-- **4 Metodos de Pagamento**:
+- **3 Metodos de Pagamento**:
   - Stripe (Cartao de Credito Internacional)
   - Mercado Pago (Cartao + Parcelamento Brasil)
   - PIX via Abacate Pay (Pagamento Instantaneo com QR Code)
-  - **Banco Inter PIX Direto** (Pagamentos automáticos diretos)
 - **Precos Dinamicos**: Nao precisa criar produtos nos providers, apenas informe o valor
-- **Pagamentos Diretos**: Envie PIX diretamente usando sua conta Banco Inter (API v3)
 - **Webhooks**: Confirmacao automatica de pagamentos
 - **Docker Ready**: PostgreSQL + App containerizados
 
@@ -78,13 +76,6 @@ MERCADOPAGO_WEBHOOK_SECRET="..."
 ABACATEPAY_API_KEY="..."
 ABACATEPAY_WEBHOOK_SECRET="..."
 NEXT_PUBLIC_ABACATEPAY_ENV="dev"  # ou "prod"
-
-# Banco Inter (PIX Direto - NOVO!)
-INTER_CLIENT_ID="seu_client_id"
-INTER_CLIENT_SECRET="seu_client_secret"
-INTER_CERT_PATH="/path/to/cert.pem"
-INTER_KEY_PATH="/path/to/key.pem"
-INTER_SANDBOX="false"  # true para sandbox, false para produção
 
 # App
 NEXT_PUBLIC_BASE_URL="http://localhost:3000"
@@ -137,14 +128,12 @@ payment-hub/
 │   │       └── payments/
 │   │           ├── stripe/    # create, webhook
 │   │           ├── mercadopago/  # create, webhook
-│   │           ├── pix/       # create, status, webhook, simulate
-│   │           └── inter/     # payout, status, config (NOVO!)
+│   │           └── pix/       # create, status, webhook, simulate
 │   ├── components/ui/         # shadcn/ui components
 │   ├── services/              # Business logic
 │   │   ├── payment-service.ts
 │   │   ├── order-service.ts
-│   │   ├── product-service.ts
-│   │   └── inter-payout-service.ts  # Banco Inter API client (NOVO!)
+│   │   └── product-service.ts
 │   └── lib/
 │       ├── db.ts              # Prisma client
 │       ├── stripe.ts          # Stripe SDK
@@ -193,24 +182,6 @@ POST /api/payments/pix/create
 
 # Verificar status PIX
 GET /api/payments/pix/status?orderId=...
-
-# Banco Inter PIX Direto - NOVO!
-POST /api/payments/inter/payout
-{
-  "amount": 5000,
-  "pixKey": "email@example.com",
-  "description": "Pagamento de produto",
-  "idempotencyKey": "uuid-opcional",
-  "metadata": { "orderId": "...", "userId": "..." }
-}
-# Retorna: { success, transferId, status, amount, pixKey, createdAt }
-
-# Verificar status de transferência Inter
-GET /api/payments/inter/status?transferId=...
-
-# Verificar configuração Inter
-GET /api/payments/inter/config
-# Retorna: { configured, hasClientId, hasClientSecret, hasCertificates, ... }
 ```
 
 ### Webhooks
@@ -248,102 +219,12 @@ Configure os endpoints nos dashboards dos providers:
 2. Crie uma conta
 3. Dashboard > API Keys
 
-### Banco Inter (PIX Direto - NOVO!)
-1. Abra conta jurídica em [Banco Inter](https://www.bancointer.com.br)
-2. Acesse Internet Banking > Configurações > Integrações > API
-3. Crie uma nova aplicação
-   - Nome: "Payment Hub"
-   - Escopo: `pix.write`, `pix.read`
-4. Copie **Client ID** e **Client Secret**
-5. Em **Certificados Digitais**, gere novo certificado
-   - Formato: PEM
-   - Download arquivo .zip
-   - Extrair `cert.pem` e `key.pem`
-6. Defina no `.env`:
-   ```env
-   INTER_CLIENT_ID="seu_client_id"
-   INTER_CLIENT_SECRET="seu_client_secret"
-   INTER_CERT_PATH="/path/to/cert.pem"
-   INTER_KEY_PATH="/path/to/key.pem"
-   INTER_SANDBOX="false"
-   ```
-
-**Vantagens:**
-- Sem custo: Pix é grátis para contas jurídicas
-- Sem checkout: Pagamento direto, automático
-- Seguro: OAuth 2.0 + mTLS
-- Rápido: Pix em tempo real
-
 ## Modo de Desenvolvimento
 
 ### Para PIX (Abacate Pay)
 1. Configure `NEXT_PUBLIC_ABACATEPAY_ENV=dev`
 2. Um botao "Simular Pagamento" aparecera no checkout
 3. Use para testar o fluxo completo sem pagamento real
-
-### Para Banco Inter (PIX Direto)
-1. Configure `INTER_SANDBOX=true` para usar ambiente de teste
-2. Use credenciais de sandbox do Inter
-3. Teste transferências sem gastar dinheiro real
-4. Quando pronto, mude para `INTER_SANDBOX=false` para produção
-
-## Como Usar Banco Inter (Exemplos)
-
-### Enviar PIX Direto
-```bash
-curl -X POST http://localhost:3000/api/payments/inter/payout \
-  -H "Content-Type: application/json" \
-  -d '{
-    "amount": 5000,
-    "pixKey": "recipient@email.com",
-    "description": "Pagamento de produto",
-    "idempotencyKey": "unique-uuid"
-  }'
-```
-
-Resposta:
-```json
-{
-  "success": true,
-  "transferId": "inter_transfer_xyz",
-  "status": "completed",
-  "amount": 5000,
-  "pixKey": "recipient@email.com",
-  "createdAt": "2024-12-24T10:30:00Z"
-}
-```
-
-### Verificar Status de Transferência
-```bash
-curl http://localhost:3000/api/payments/inter/status?transferId=inter_transfer_xyz
-```
-
-### Verificar Se Banco Inter Está Configurado
-```bash
-curl http://localhost:3000/api/payments/inter/config
-```
-
-Resposta:
-```json
-{
-  "success": true,
-  "config": {
-    "configured": true,
-    "hasClientId": true,
-    "hasClientSecret": true,
-    "hasCertificates": true,
-    "sandbox": false
-  }
-}
-```
-
-## Casos de Uso Banco Inter
-
-1. **Automação de Pagamentos**: Pague fornecedores, funcionários, fretistas automaticamente
-2. **Marketplace**: Repasse automático para sellers
-3. **Assinaturas**: Débito automático recorrente
-4. **Transferências B2B**: Pagamento direto entre empresas
-5. **Integrações Custom**: Use diretamente na sua app
 
 ## Tecnologias
 
