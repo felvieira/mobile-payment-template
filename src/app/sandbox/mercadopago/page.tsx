@@ -11,6 +11,7 @@ import { CheckoutProButton } from '@/components/payments/mercadopago/CheckoutPro
 import { TransparentCardForm } from '@/components/payments/mercadopago/TransparentCardForm'
 import { TransparentPixQR } from '@/components/payments/mercadopago/TransparentPixQR'
 import { TransparentBoleto } from '@/components/payments/mercadopago/TransparentBoleto'
+import { SetupGuide } from '../_components/SetupGuide'
 
 // Bricks need ssr: false — they use browser-only MP SDK
 const BricksPayment = dynamic(
@@ -122,8 +123,9 @@ export default function MPSandboxPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main tabs */}
         <div className="lg:col-span-2">
-          <Tabs defaultValue="checkout-pro">
+          <Tabs defaultValue="setup">
             <TabsList className="flex flex-wrap h-auto gap-1 p-1 mb-2">
+              <TabsTrigger value="setup" className="text-xs">📘 Setup</TabsTrigger>
               <TabsTrigger value="checkout-pro" className="text-xs">Checkout Pro</TabsTrigger>
               <TabsTrigger value="transparent-card" className="text-xs">Cartão</TabsTrigger>
               <TabsTrigger value="transparent-pix" className="text-xs">PIX</TabsTrigger>
@@ -133,6 +135,120 @@ export default function MPSandboxPage() {
               <TabsTrigger value="bricks-status" className="text-xs">Bricks Status</TabsTrigger>
               <TabsTrigger value="bricks-wallet" className="text-xs">Bricks Wallet</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="setup">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Como configurar o MercadoPago</CardTitle>
+                  <CardDescription>
+                    Passo a passo completo: criar conta, app, pegar credenciais, configurar webhook.
+                    Os passos REUSABLE você faz uma vez por conta MP. Os PER-APP precisam ser refeitos para cada projeto novo.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SetupGuide
+                    title="Setup MercadoPago — QA + PROD"
+                    subtitle="Total: ~10 minutos para QA, ~15 minutos para PROD com webhook"
+                    steps={[
+                      {
+                        num: 1,
+                        title: 'Criar conta no Mercado Pago',
+                        desc: 'Você precisa de uma conta MP normal (a mesma que usa pra receber dinheiro). Para testes, o MP cria uma conta QA paralela automaticamente.',
+                        href: 'https://www.mercadopago.com.br/registration-mp',
+                        type: 'reusable',
+                      },
+                      {
+                        num: 2,
+                        title: 'Acessar o painel de Developers',
+                        desc: 'Após login, acesse o painel de aplicações. Aqui você cria suas integrações.',
+                        href: 'https://www.mercadopago.com.br/developers/panel/app',
+                        type: 'reusable',
+                      },
+                      {
+                        num: 3,
+                        title: 'Criar uma aplicação (App)',
+                        desc: 'Clique em "Criar aplicação". Escolha "Pagamentos online" → "Checkout Transparente" (cobre todos os modos: Bricks, Checkout Pro e Transparente).',
+                        href: 'https://www.mercadopago.com.br/developers/panel/app',
+                        type: 'per-app',
+                        bullets: [
+                          'Nome do app: ex. "MeuProjeto"',
+                          'Solução: Checkout Pro / Transparente',
+                          'Modelo de integração: API Orders',
+                        ],
+                      },
+                      {
+                        num: 4,
+                        title: 'Copiar credenciais de TESTE (QA)',
+                        desc: 'Em "Credenciais de teste" copie o Public Key e o Access Token. Cole em .env.local nas vars MERCADOPAGO_QA_*.',
+                        href: 'https://www.mercadopago.com.br/developers/panel/app',
+                        type: 'reusable',
+                        copy: 'MERCADOPAGO_QA_ACCESS_TOKEN=APP_USR-xxx\nNEXT_PUBLIC_MERCADOPAGO_QA_PUBLIC_KEY=APP_USR-xxx',
+                      },
+                      {
+                        num: 5,
+                        title: 'Copiar credenciais de PRODUÇÃO',
+                        desc: 'Em "Credenciais de produção" copie o Public Key e o Access Token. Cole em .env.prod.local nas vars MERCADOPAGO_PROD_*.',
+                        href: 'https://www.mercadopago.com.br/developers/panel/app',
+                        type: 'reusable',
+                        copy: 'MERCADOPAGO_PROD_ACCESS_TOKEN=APP_USR-xxx\nNEXT_PUBLIC_MERCADOPAGO_PROD_PUBLIC_KEY=APP_USR-xxx',
+                      },
+                      {
+                        num: 6,
+                        title: 'Criar Usuários de Teste',
+                        desc: 'Para testar Checkout Pro/Bricks você precisa de um Buyer Test User (não pode usar sua própria conta MP em modo teste).',
+                        href: 'https://www.mercadopago.com.br/developers/panel/test-users',
+                        type: 'reusable',
+                        bullets: [
+                          'Crie 1 Seller Test User (você como vendedor)',
+                          'Crie 1 Buyer Test User (comprador para testar pagamentos)',
+                          'Anote usuário, senha e código de verificação',
+                        ],
+                      },
+                      {
+                        num: 7,
+                        title: 'Configurar Webhook (URL pública)',
+                        desc: 'No app criado, vá em "Webhooks" → "Configurar notificações". URL deve ser pública (não localhost). Use ngrok ou deploy de teste.',
+                        href: 'https://www.mercadopago.com.br/developers/panel/app',
+                        type: 'per-app',
+                        copy: 'https://seu-dominio.com/api/payments/mercadopago/webhook',
+                        bullets: [
+                          'Eventos a marcar: Payment, Plan, Subscription',
+                          'Modo: Produção (ou Teste, conforme suas keys)',
+                        ],
+                      },
+                      {
+                        num: 8,
+                        title: 'Copiar Webhook Secret',
+                        desc: 'Após salvar o webhook, em "Suas chaves secretas" copie a secret. Cole em MERCADOPAGO_WEBHOOK_SECRET (vale para QA e PROD).',
+                        type: 'per-app',
+                        copy: 'MERCADOPAGO_WEBHOOK_SECRET=xxx',
+                      },
+                      {
+                        num: 9,
+                        title: 'Definir ambiente ativo',
+                        desc: 'No .env, MERCADOPAGO_ENV=qa usa as keys QA, MERCADOPAGO_ENV=prod usa as PROD. Trocar é só mudar essa var.',
+                        type: 'per-app',
+                        copy: 'MERCADOPAGO_ENV=qa',
+                      },
+                      {
+                        num: 10,
+                        title: 'Testar no sandbox',
+                        desc: 'Volte aqui no /sandbox/mercadopago, escolha um produto e teste cada um dos 8 modos. Use os cartões de teste da sidebar.',
+                        type: 'per-app',
+                      },
+                    ]}
+                    links={[
+                      { label: 'Painel Developers', href: 'https://www.mercadopago.com.br/developers/panel/app' },
+                      { label: 'Test Users', href: 'https://www.mercadopago.com.br/developers/panel/test-users' },
+                      { label: 'Docs Checkout Pro', href: 'https://www.mercadopago.com.br/developers/pt/docs/checkout-pro/landing' },
+                      { label: 'Docs Checkout Transparente', href: 'https://www.mercadopago.com.br/developers/pt/docs/checkout-api/landing' },
+                      { label: 'Docs Bricks', href: 'https://www.mercadopago.com.br/developers/pt/docs/checkout-bricks/landing' },
+                      { label: 'Docs Webhooks', href: 'https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks' },
+                    ]}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="checkout-pro">
               <Card>
