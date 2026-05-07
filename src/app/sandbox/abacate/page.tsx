@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react'
 import { EnvBadge } from '../_components/EnvBadge'
+import { SetupGuide } from '../_components/SetupGuide'
 import { AbacatePixForm } from '@/components/payments/abacate/AbacatePixForm'
 
 interface Product {
@@ -96,11 +97,93 @@ export default function AbacateSandboxPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Tabs defaultValue="pix">
+          <Tabs defaultValue="setup">
             <TabsList className="mb-4">
+              <TabsTrigger value="setup">📘 Setup</TabsTrigger>
               <TabsTrigger value="pix">PIX QR Code</TabsTrigger>
               <TabsTrigger value="info">Sobre o Abacate PIX</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="setup">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Como configurar o Abacate Pay</CardTitle>
+                  <CardDescription>
+                    Passo a passo: criar conta, pegar API keys de dev e prod, configurar webhook PIX.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SetupGuide
+                    title="Setup Abacate Pay — DEV + PROD"
+                    subtitle="Total: ~5 minutos. Modo dev tem botão de simular pagamento (super útil pra testar fluxo)."
+                    steps={[
+                      {
+                        num: 1,
+                        title: 'Criar conta no Abacate Pay',
+                        desc: 'Cadastre-se com email. Não precisa CNPJ para usar modo dev. Para receber em produção precisa cadastro PJ.',
+                        href: 'https://dash.abacatepay.com',
+                        type: 'reusable',
+                      },
+                      {
+                        num: 2,
+                        title: 'Copiar API Key de DEV',
+                        desc: 'No dashboard, vá em "API & Webhooks" (ou "Integrações"). Copie a chave de desenvolvimento. Em modo dev você pode simular pagamentos sem gastar dinheiro real.',
+                        href: 'https://dash.abacatepay.com',
+                        type: 'reusable',
+                        copy: 'ABACATE_PAY_DEV_API_KEY=abc_dev_xxx',
+                      },
+                      {
+                        num: 3,
+                        title: 'Copiar API Key de PRODUÇÃO',
+                        desc: 'Após validar conta PJ e ativar pagamentos reais, copie a chave de produção. CUIDADO: cobranças em prod são reais.',
+                        href: 'https://dash.abacatepay.com',
+                        type: 'reusable',
+                        copy: 'ABACATE_PAY_PROD_API_KEY=abc_prod_xxx',
+                      },
+                      {
+                        num: 4,
+                        title: 'Configurar Webhook',
+                        desc: 'No painel, em "Webhooks", adicione um endpoint para receber notificações de pagamento. URL deve ser pública (use ngrok em dev).',
+                        href: 'https://dash.abacatepay.com',
+                        type: 'per-app',
+                        copy: 'https://seu-dominio.com/api/payments/pix/webhook',
+                        bullets: [
+                          'Eventos: pix.payment.received (PIX recebido)',
+                          'Eventos: pix.payment.expired (PIX expirado)',
+                          'Modo: separado entre dev e prod (configure os 2 se for usar ambos)',
+                        ],
+                      },
+                      {
+                        num: 5,
+                        title: 'Copiar Webhook Secret',
+                        desc: 'Após criar o webhook, copie o secret de assinatura. Use para validar HMAC nas notificações.',
+                        type: 'per-app',
+                        copy: 'ABACATE_PAY_WEBHOOK_SECRET=xxx',
+                      },
+                      {
+                        num: 6,
+                        title: 'Definir ambiente ativo',
+                        desc: 'ABACATE_PAY_ENV=dev usa a chave dev e libera o botão "Simular pagamento". ABACATE_PAY_ENV=prod usa a chave de produção.',
+                        type: 'per-app',
+                        copy: 'ABACATE_PAY_ENV=dev',
+                      },
+                      {
+                        num: 7,
+                        title: 'Testar no sandbox',
+                        desc: 'Volte aqui na aba "PIX QR Code", informe email, clique em gerar. Em modo dev clique em "Simular pagamento" para confirmar instantaneamente.',
+                        type: 'per-app',
+                      },
+                    ]}
+                    links={[
+                      { label: 'Dashboard Abacate Pay', href: 'https://dash.abacatepay.com' },
+                      { label: 'Documentação oficial', href: 'https://docs.abacatepay.com' },
+                      { label: 'API Reference', href: 'https://docs.abacatepay.com/api-reference' },
+                      { label: 'Suporte', href: 'mailto:contato@abacatepay.com' },
+                    ]}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="pix">
               <Card>
